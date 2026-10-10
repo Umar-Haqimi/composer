@@ -4,14 +4,15 @@ import type { LyricLine } from "@/domain/line/model";
 import { hasAnyTiming } from "@/domain/line/predicates";
 import { shiftLineTiming } from "@/domain/line/shift";
 import { isSyncableLine } from "@/domain/line/sync-progress";
-import { commitGesture, type SyncGesture } from "@/domain/sync/commit-gesture";
+import { type SyncGesture, commitGesture } from "@/domain/sync/commit-gesture";
 import { isCursorPastEnd, nextSyncableLineIndex, previousSlot, resolveSyncCursor } from "@/domain/sync/cursor";
+import { bracketRewindTime, findUndoTarget, overlapsPreviousLine } from "@/domain/sync/rewind";
 import type { WordTiming } from "@/domain/word/timing";
 import { useAudioStore } from "@/stores/audio";
 import { useConfirm } from "@/stores/confirm-store";
 import { useProjectStore } from "@/stores/project";
 import { useSettingsStore } from "@/stores/settings";
-import { formatTimeMs, type SyncState, splitIntoWords } from "@/utils/sync-helpers";
+import { type SyncState, formatTimeMs, splitIntoWords } from "@/utils/sync-helpers";
 import { nudgeBgWordBegin, nudgeBgWordEnd, setBgWordBegin, setBgWordEnd } from "@/utils/timing/bg-word-timing";
 import { nudgeLineBegin, setLineBegin } from "@/utils/timing/line-timing";
 import { nudgeWordBegin, nudgeWordEnd, setWordBegin, setWordEnd } from "@/utils/timing/word-timing";
@@ -34,6 +35,7 @@ interface UseSyncHandlersProps {
 // -- Constants ------------------------------------------------------------------
 
 const EARLY_TAP_TOAST_ID = "sync-early-tap";
+const UNDO_LINE_TOAST_ID = "sync-undo-line";
 
 // -- Helpers --------------------------------------------------------------------
 
@@ -76,11 +78,13 @@ function useSyncHandlers({
 
   const runGesture = useCallback(
     (gesture: SyncGesture): boolean => {
+      const { defaultWordDuration, autoRewindForBracketedLines, redoPreroll } = useSettingsStore.getState();
       const commit = commitGesture(lines, gesture, {
         cursor,
         jumped: !!syncState.jumpedToPosition,
         time: readTapTime(),
-        defaultWordDuration: useSettingsStore.getState().defaultWordDuration,
+        defaultWordDuration,
+        overlapsPrevious: autoRewindForBracketedLines && overlapsPreviousLine(lines, cursor.lineIndex),
       });
       if (!commit) return false;
       updateLinesWithHistory(commit.lineUpdates, { deriveText: false, propagateToSiblings: false });
@@ -88,9 +92,26 @@ function useSyncHandlers({
       if (commit.clampedTo !== null) {
         toast(`Early tap snapped to ${formatTimeMs(commit.clampedTo)}`, { id: EARLY_TAP_TOAST_ID });
       }
+      // A hold-tap has already opened the bracketed line's first word at the current time.
+      if (autoRewindForBracketedLines && gesture !== "hold-tap") {
+        const rewindTo = bracketRewindTime(lines, cursor, commit, redoPreroll);
+        if (rewindTo !== null) {
+          seekTo(rewindTo);
+          setIsPlaying(true);
+        }
+      }
       return true;
     },
-    [lines, cursor, syncState.jumpedToPosition, readTapTime, updateLinesWithHistory, setSyncState],
+    [
+      lines,
+      cursor,
+      syncState.jumpedToPosition,
+      readTapTime,
+      updateLinesWithHistory,
+      setSyncState,
+      seekTo,
+      setIsPlaying,
+    ],
   );
 
   const handleTap = useCallback(() => {
@@ -261,6 +282,26 @@ function useSyncHandlers({
     [lines, cursor, granularity, handleNudgeWord, updateLinesWithHistory],
   );
 
+  const handleUndoAndRewindLine = useCallback(() => {
+    const target = findUndoTarget(lines, cursor);
+    if (!target) return;
+    const line = lines[target.lineIndex];
+    updateLinesWithHistory(
+      [{ id: line.id, updates: { words: undefined, begin: undefined, end: undefined, backgroundWords: undefined } }],
+      { deriveText: false, propagateToSiblings: false },
+    );
+    setSyncState((prev) => ({
+      ...prev,
+      position: { lineIndex: target.lineIndex, wordIndex: 0 },
+      jumpedToPosition: true,
+      isActive: true,
+    }));
+    const { undoRewindDuration, undoContinuePlayback } = useSettingsStore.getState();
+    seekTo(Math.max(0, target.begin - undoRewindDuration));
+    setIsPlaying(undoContinuePlayback);
+    toast("Line sync undone", { id: UNDO_LINE_TOAST_ID });
+  }, [lines, cursor, updateLinesWithHistory, setSyncState, seekTo, setIsPlaying]);
+
   const handleSplitWord = useCallback(
     (lineIdx: number, wordIdx: number, newWords: WordTiming[]) => {
       const line = lines[lineIdx];
@@ -323,6 +364,7 @@ function useSyncHandlers({
     handleNudgeLine,
     handleSetLineTime,
     handleNudgeLastSynced,
+    handleUndoAndRewindLine,
     handleSplitWord,
     handleNudgeBgWord,
     handleSetBgWordTime,

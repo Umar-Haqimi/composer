@@ -1038,3 +1038,159 @@ describe("sync-panel bg-init contract", () => {
     expect(useProjectStore.getState().lines[0].backgroundWords).toBeUndefined();
   });
 });
+
+describe("useSyncHandlers.handleUndoAndRewindLine", () => {
+  const lineA = () =>
+    createLine({
+      id: "l0",
+      text: "Hello world",
+      words: [createWord({ text: "Hello ", begin: 4, end: 4.5 }), createWord({ text: "world", begin: 4.5, end: 5 })],
+    });
+  const partialB = () =>
+    createLine({ id: "l1", text: "Second line", words: [createWord({ text: "Second ", begin: 8, end: 8.4 })] });
+
+  it("clears the cursor line when it has timing and rewinds before its first word", async () => {
+    useProjectStore.getState().setLines([lineA(), partialB()]);
+    const { result, act, getSyncState, playingCalls } = await mountSyncHandlers({
+      initialSyncState: { position: { lineIndex: 1, wordIndex: 1 }, isActive: true },
+    });
+
+    await act(() => result.current.handleUndoAndRewindLine());
+
+    expect(useProjectStore.getState().lines[1].words).toBeUndefined();
+    expect(useProjectStore.getState().lines[0].words).toHaveLength(2);
+    expect(getSyncState()).toMatchObject({
+      position: { lineIndex: 1, wordIndex: 0 },
+      jumpedToPosition: true,
+      isActive: true,
+    });
+    expect(useAudioStore.getState().currentTime).toBe(8 - 3);
+    expect(playingCalls.at(-1)).toBe(true);
+  });
+
+  it("falls back to the previous timed line when the cursor line is untimed", async () => {
+    useProjectStore.getState().setLines([lineA(), createLine({ id: "l1", text: "Second line" })]);
+    const { result, act, getSyncState } = await mountSyncHandlers({
+      initialSyncState: { position: { lineIndex: 1, wordIndex: 0 }, isActive: true },
+    });
+
+    await act(() => result.current.handleUndoAndRewindLine());
+
+    expect(useProjectStore.getState().lines[0].words).toBeUndefined();
+    expect(getSyncState().position).toEqual({ lineIndex: 0, wordIndex: 0 });
+    expect(useAudioStore.getState().currentTime).toBe(1);
+  });
+
+  it("uses the configured rewind duration and clamps at zero", async () => {
+    useSettingsStore.setState({ undoRewindDuration: 10 });
+    useProjectStore.getState().setLines([lineA()]);
+    const { result, act } = await mountSyncHandlers({
+      initialSyncState: { position: { lineIndex: 0, wordIndex: 2 }, isActive: true },
+    });
+
+    await act(() => result.current.handleUndoAndRewindLine());
+
+    expect(useAudioStore.getState().currentTime).toBe(0);
+  });
+
+  it("pauses when continue-playback is off", async () => {
+    useSettingsStore.setState({ undoContinuePlayback: false });
+    useProjectStore.getState().setLines([lineA()]);
+    const { result, act, playingCalls } = await mountSyncHandlers({
+      initialSyncState: { position: { lineIndex: 0, wordIndex: 2 }, isActive: true },
+    });
+
+    await act(() => result.current.handleUndoAndRewindLine());
+
+    expect(playingCalls).toEqual([false]);
+  });
+
+  it("is a no-op when nothing has been synced", async () => {
+    useProjectStore.getState().setLines([createLine({ id: "l0", text: "Hello world" })]);
+    useAudioStore.setState({ currentTime: 7 });
+    const { result, act, getSyncState, playingCalls } = await mountSyncHandlers();
+    const before = getSyncState();
+
+    await act(() => result.current.handleUndoAndRewindLine());
+
+    expect(getSyncState()).toBe(before);
+    expect(useAudioStore.getState().currentTime).toBe(7);
+    expect(playingCalls).toEqual([]);
+  });
+
+  it("invariant: project undo restores the cleared line", async () => {
+    useProjectStore.getState().setLines([lineA()]);
+    const { result, act } = await mountSyncHandlers({
+      initialSyncState: { position: { lineIndex: 0, wordIndex: 2 }, isActive: true },
+    });
+
+    await act(() => result.current.handleUndoAndRewindLine());
+    useProjectStore.getState().undo();
+
+    expect(useProjectStore.getState().lines[0].words).toHaveLength(2);
+  });
+});
+
+describe("useSyncHandlers bracketed-line auto-rewind", () => {
+  const mainLine = () =>
+    createLine({ id: "l0", text: "Hello world", words: [createWord({ text: "Hello ", begin: 4, end: 4.5 })] });
+  const bgLine = () => createLine({ id: "l1", text: "(ooh ah)" });
+
+  it("rewinds to the main line's start minus the pre-roll when sync advances onto a bracketed line", async () => {
+    useProjectStore.getState().setLines([mainLine(), bgLine()]);
+    const { result, act, getSyncState, playingCalls } = await mountSyncHandlers({
+      initialSyncState: { position: { lineIndex: 0, wordIndex: 1 }, isActive: true },
+      initialCurrentTime: 5,
+    });
+
+    await act(() => result.current.handleTap());
+
+    expect(getSyncState().position).toEqual({ lineIndex: 1, wordIndex: 0 });
+    expect(useAudioStore.getState().currentTime).toBe(4 - DEFAULTS.redoPreroll);
+    expect(playingCalls.at(-1)).toBe(true);
+  });
+
+  it("lets the bracketed line's first tap land inside the main line without snapping or trimming it", async () => {
+    useProjectStore.getState().setLines([mainLine(), bgLine()]);
+    const { result, rerender, act, getSyncState } = await mountSyncHandlers({
+      initialSyncState: { position: { lineIndex: 0, wordIndex: 1 }, isActive: true },
+      initialCurrentTime: 5,
+    });
+
+    await act(() => result.current.handleTap());
+    const mainAfterFirstTap = useProjectStore.getState().lines[0].words;
+    await rerender({ syncState: getSyncState(), currentTime: 4.2 });
+    await act(() => result.current.handleTap());
+
+    expect(useProjectStore.getState().lines[1].words?.[0].begin).toBe(4.2);
+    expect(useProjectStore.getState().lines[0].words).toEqual(mainAfterFirstTap);
+  });
+
+  it("does not rewind when the setting is off", async () => {
+    useSettingsStore.setState({ autoRewindForBracketedLines: false });
+    useProjectStore.getState().setLines([mainLine(), bgLine()]);
+    useAudioStore.setState({ currentTime: 5 });
+    const { result, act, playingCalls } = await mountSyncHandlers({
+      initialSyncState: { position: { lineIndex: 0, wordIndex: 1 }, isActive: true },
+      initialCurrentTime: 5,
+    });
+
+    await act(() => result.current.handleTap());
+
+    expect(useAudioStore.getState().currentTime).toBe(5);
+    expect(playingCalls).toEqual([]);
+  });
+
+  it("does not rewind when the next line is not bracketed", async () => {
+    useProjectStore.getState().setLines([mainLine(), createLine({ id: "l1", text: "Next main" })]);
+    useAudioStore.setState({ currentTime: 5 });
+    const { result, act } = await mountSyncHandlers({
+      initialSyncState: { position: { lineIndex: 0, wordIndex: 1 }, isActive: true },
+      initialCurrentTime: 5,
+    });
+
+    await act(() => result.current.handleTap());
+
+    expect(useAudioStore.getState().currentTime).toBe(5);
+  });
+});
