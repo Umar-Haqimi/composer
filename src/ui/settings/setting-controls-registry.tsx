@@ -85,6 +85,9 @@ const SETTING_CONTROLS: Record<SettingId, SettingControl> = {
   defaultWordDuration: { kind: "slider", min: 0.1, max: 1, step: 0.05, format: asMilliseconds },
   minWordDuration: { kind: "slider", min: 0.01, max: 0.2, step: 0.01, format: asMilliseconds },
   redoPreroll: { kind: "slider", min: 0, max: 5, step: 0.1, format: asMilliseconds },
+  undoRewindDuration: { kind: "slider", min: 0.5, max: 10, step: 0.5, format: (v) => `${v.toFixed(1)}s` },
+  undoContinuePlayback: TOGGLE,
+  autoRewindForBracketedLines: TOGGLE,
   defaultGranularity: {
     kind: "select",
     options: [

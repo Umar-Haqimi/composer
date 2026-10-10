@@ -53,6 +53,9 @@ interface SettingsState {
   defaultWordDuration: number;
   minWordDuration: number;
   redoPreroll: number;
+  undoRewindDuration: number;
+  undoContinuePlayback: boolean;
+  autoRewindForBracketedLines: boolean;
   defaultGranularity: GranularityDefault;
 
   autoSaveDelay: number;
@@ -125,6 +128,9 @@ const DEFAULTS: SettingsState = {
   defaultWordDuration: 0.3,
   minWordDuration: DEFAULT_MIN_WORD_DURATION,
   redoPreroll: 1.5,
+  undoRewindDuration: 3,
+  undoContinuePlayback: true,
+  autoRewindForBracketedLines: true,
   defaultGranularity: "word",
 
   autoSaveDelay: 2000,

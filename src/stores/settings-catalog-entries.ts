@@ -1,5 +1,6 @@
 import type { SettingsState } from "@/stores/settings";
 import type { SettingEntry } from "@/stores/settings-catalog";
+import { SYNC_UNDO_REWIND_ENTRIES } from "@/stores/settings-catalog-sync-entries";
 import { MOD_KEY } from "@/utils/platform";
 
 // -- Catalog -------------------------------------------------------------------
@@ -189,6 +190,7 @@ const SETTINGS_CATALOG = {
     description: "How far before the selected line or word playback starts when re-recording in Sync.",
     settingKey: "redoPreroll",
   },
+  ...SYNC_UNDO_REWIND_ENTRIES,
   defaultGranularity: {
     section: "sync",
     label: "Default granularity",

@@ -86,3 +86,30 @@ describe("previewSidebarWidth", () => {
     expect(useSettingsStore.getState().previewSidebarWidth).toBe(480);
   });
 });
+
+describe("sync undo and bracket rewind settings", () => {
+  it("gives a saved blob from before the settings existed the defaults", async () => {
+    const {
+      undoRewindDuration: _a,
+      undoContinuePlayback: _b,
+      autoRewindForBracketedLines: _c,
+      ...withoutKeys
+    } = legacyBlob();
+    await rehydrateAt(6, withoutKeys);
+    const state = useSettingsStore.getState();
+    expect(state.undoRewindDuration).toBe(3);
+    expect(state.undoContinuePlayback).toBe(true);
+    expect(state.autoRewindForBracketedLines).toBe(true);
+  });
+
+  it("keeps saved choices across a rehydrate", async () => {
+    await rehydrateAt(
+      6,
+      legacyBlob({ undoRewindDuration: 5.5, undoContinuePlayback: false, autoRewindForBracketedLines: false }),
+    );
+    const state = useSettingsStore.getState();
+    expect(state.undoRewindDuration).toBe(5.5);
+    expect(state.undoContinuePlayback).toBe(false);
+    expect(state.autoRewindForBracketedLines).toBe(false);
+  });
+});
