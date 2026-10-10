@@ -119,6 +119,12 @@ const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     defaultBinding: { key: "l" },
   },
   {
+    id: "sync.undoAndRewind",
+    scope: "sync",
+    description: "Undo line sync and rewind",
+    defaultBinding: { key: "r" },
+  },
+  {
     id: "timeline.toggleFollow",
     scope: "timeline",
     description: "Toggle follow",

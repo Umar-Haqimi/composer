@@ -61,6 +61,15 @@ describe("SHORTCUT_DEFINITIONS", () => {
     }
   });
 
+  it("registers the undo-line-and-rewind shortcut with default key 'r' in the sync scope", () => {
+    const undo = SHORTCUT_DEFINITIONS.find((d) => d.id === "sync.undoAndRewind");
+
+    expect(undo).toBeDefined();
+    expect(undo?.scope).toBe("sync");
+    expect(undo?.description).toBe("Undo line sync and rewind");
+    expect(undo?.defaultBinding).toEqual({ key: "r" });
+  });
+
   describe("invariants", () => {
     it("has a unique id for every definition", () => {
       const ids = SHORTCUT_DEFINITIONS.map((d) => d.id);

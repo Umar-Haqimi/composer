@@ -45,6 +45,7 @@ const SHORTCUT_SECTIONS: ShortcutSectionProps[] = [
       { keys: ["F"], description: "Hold to sync word (hold mode)", shortcutId: "sync.holdSync" },
       { keys: ["ArrowLeft"], description: "Nudge last synced -50ms", shortcutId: "sync.nudgeLeft" },
       { keys: ["ArrowRight"], description: "Nudge last synced +50ms", shortcutId: "sync.nudgeRight" },
+      { keys: ["R"], description: "Undo line sync and rewind", shortcutId: "sync.undoAndRewind" },
       { keys: ["Mod", "Z"], description: "Undo" },
       { keys: ["Mod", "Shift", "Z"], description: "Redo" },
     ],
