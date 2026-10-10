@@ -106,6 +106,7 @@ const SyncPanel: React.FC = () => {
     handleNudgeLine,
     handleSetLineTime,
     handleNudgeLastSynced,
+    handleUndoAndRewindLine,
     handleSplitWord,
     handleNudgeBgWord,
     handleSetBgWordTime,
@@ -357,6 +358,11 @@ const SyncPanel: React.FC = () => {
           e.preventDefault();
           handleNudgeLastSynced(getNudgeAmount());
           break;
+        case "sync.undoAndRewind":
+          e.preventDefault();
+          if (editMode || isHolding || e.repeat) return;
+          handleUndoAndRewindLine();
+          break;
         case "sync.toggleTextVariant":
           e.preventDefault();
           if (hasTransliteration) toggleTextVariant();
@@ -390,7 +396,17 @@ const SyncPanel: React.FC = () => {
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", handleBlur);
     };
-  }, [activeTab, undo, redo, handleNudgeLastSynced, editMode, isHolding, hasTransliteration, toggleTextVariant]);
+  }, [
+    activeTab,
+    undo,
+    redo,
+    handleNudgeLastSynced,
+    handleUndoAndRewindLine,
+    editMode,
+    isHolding,
+    hasTransliteration,
+    toggleTextVariant,
+  ]);
 
   const showScrollableView = !isPlaying || editMode;
 

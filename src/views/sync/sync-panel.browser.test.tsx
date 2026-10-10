@@ -359,3 +359,52 @@ describe("bg-init derivation", () => {
     expect(useProjectStore.getState().lines[0].text).toBe("a");
   });
 });
+
+describe("SyncPanel · undo line shortcut", () => {
+  function pressUndo(): void {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "r", code: "KeyR", bubbles: true }));
+  }
+
+  function loadTimedProject(): void {
+    useAudioStore.setState({
+      source: { type: "file", file: createAudioFile() },
+      duration: 20,
+      currentTime: 9,
+      isPlaying: true,
+    });
+    useProjectStore.setState({
+      activeTab: "sync",
+      lines: [
+        createLine({
+          id: "l0",
+          text: "Hello world",
+          words: [
+            createWord({ text: "Hello ", begin: 6, end: 6.5 }),
+            createWord({ text: "world", begin: 6.5, end: 7 }),
+          ],
+        }),
+        createLine({ id: "l1", text: "Second line" }),
+      ],
+    });
+  }
+
+  it("clears the last synced line and rewinds when R is pressed", async () => {
+    loadTimedProject();
+    await render(<SyncPanel />);
+
+    pressUndo();
+
+    await expect.poll(() => useProjectStore.getState().lines[0].words).toBeUndefined();
+    expect(useAudioStore.getState().currentTime).toBe(3);
+  });
+
+  it("does nothing in edit mode", async () => {
+    loadTimedProject();
+    const screen = await render(<SyncPanel />);
+    await screen.getByRole("button", { name: "Edit" }).click();
+
+    pressUndo();
+
+    expect(useProjectStore.getState().lines[0].words).toHaveLength(2);
+  });
+});
