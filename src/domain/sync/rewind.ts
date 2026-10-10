@@ -62,4 +62,3 @@ function bracketRewindTime(
 // -- Exports ------------------------------------------------------------------
 
 export { bracketAnchorLineIndex, bracketRewindTime, findUndoTarget, overlapsPreviousLine };
-export type { UndoTarget };
