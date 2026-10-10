@@ -1184,7 +1184,7 @@ describe("useSyncHandlers bracketed-line auto-rewind", () => {
   it("does not rewind when the next line is not bracketed", async () => {
     useProjectStore.getState().setLines([mainLine(), createLine({ id: "l1", text: "Next main" })]);
     useAudioStore.setState({ currentTime: 5 });
-    const { result, act } = await mountSyncHandlers({
+    const { result, act, playingCalls } = await mountSyncHandlers({
       initialSyncState: { position: { lineIndex: 0, wordIndex: 1 }, isActive: true },
       initialCurrentTime: 5,
     });
@@ -1192,5 +1192,35 @@ describe("useSyncHandlers bracketed-line auto-rewind", () => {
     await act(() => result.current.handleTap());
 
     expect(useAudioStore.getState().currentTime).toBe(5);
+    expect(playingCalls).toEqual([]);
+  });
+
+  it("line granularity: advancing a main line onto a bracketed line does not seek or play", async () => {
+    useProjectStore.getState().setLines([mainLine(), bgLine()]);
+    useAudioStore.setState({ currentTime: 5 });
+    const { result, act, getSyncState, playingCalls } = await mountSyncHandlers({
+      granularity: "line",
+      initialSyncState: { position: { lineIndex: 0, wordIndex: 0 }, isActive: true },
+      initialCurrentTime: 5,
+    });
+
+    await act(() => result.current.handleTap());
+
+    expect(getSyncState().position.lineIndex).toBe(1);
+    expect(useAudioStore.getState().currentTime).toBe(5);
+    expect(playingCalls).toEqual([]);
+  });
+
+  it("line granularity: a tap on the bracketed line before the previous line's start is still snapped forward", async () => {
+    useProjectStore.getState().setLines([createLine({ id: "l0", text: "Hello world", begin: 4, end: 6 }), bgLine()]);
+    const { result, act } = await mountSyncHandlers({
+      granularity: "line",
+      initialSyncState: { position: { lineIndex: 1, wordIndex: 0 }, isActive: true },
+      initialCurrentTime: 1,
+    });
+
+    await act(() => result.current.handleTap());
+
+    expect(useProjectStore.getState().lines[1].begin).toBe(4);
   });
 });

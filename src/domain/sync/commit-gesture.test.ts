@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { reconcileLine, type LyricLine } from "@/domain/line/model";
-import { commitGesture, type GestureCommit, type SyncGesture } from "@/domain/sync/commit-gesture";
+import { type LyricLine, reconcileLine } from "@/domain/line/model";
+import { type GestureCommit, type SyncGesture, commitGesture } from "@/domain/sync/commit-gesture";
 import { createLine } from "@/test/factories";
+import { describe, expect, it } from "vitest";
 
 const word = (text: string, begin: number, end: number) => ({ text, begin, end });
 const DUR = 0.3;
@@ -601,6 +601,7 @@ describe("overlapsPrevious", () => {
     expect(commit?.clampedTo).toBe(1);
   });
 
+  // The sync hook only sets the flag in word granularity; this pins the domain-level behaviour.
   it("applies to line granularity", () => {
     const lines = [createLine({ id: "l0", text: "Hello world", begin: 2, end: 4 }), bg()];
     const commit = run(lines, "tap-line", [1, 0], 1, false, true);

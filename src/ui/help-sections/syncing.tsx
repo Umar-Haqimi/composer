@@ -1,8 +1,9 @@
 import { getEffectiveKeysArray } from "@/stores/shortcut-bindings";
-import { PROSE } from "@/ui/typography";
-import { InlineKeyBadge } from "@/ui/inline-key-badge";
-import { MOD_KEY } from "@/utils/platform";
 import { HelpTopic } from "@/ui/help-topic";
+import { InlineKeyBadge } from "@/ui/inline-key-badge";
+import { SettingLink } from "@/ui/setting-link";
+import { PROSE } from "@/ui/typography";
+import { MOD_KEY } from "@/utils/platform";
 
 // -- Syncing ------------------------------------------------------------------
 
@@ -69,6 +70,12 @@ const SyncSection: React.FC = () => (
         Press <InlineKeyBadge keys={getEffectiveKeysArray("sync.nudgeLeft")} /> to nudge the last synced word 50ms
         earlier. <InlineKeyBadge keys={getEffectiveKeysArray("sync.nudgeRight")} /> nudges it 50ms later. You can also
         press {MOD_KEY} + Z to undo. Each hold produces two undo steps (start and end) so you can step back precisely.
+      </p>
+      <p className={`${PROSE} mt-1.5`}>
+        Press <InlineKeyBadge keys={getEffectiveKeysArray("sync.undoAndRewind")} /> to clear the last line and jump back
+        to retry it. In word timing mode, when the next line is a bracketed background vocal, playback jumps back to the
+        start of the line it overlaps so it can be synced. Turn this off in{" "}
+        <SettingLink setting="autoRewindForBracketedLines" />.
       </p>
     </HelpTopic>
 

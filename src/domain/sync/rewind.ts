@@ -2,8 +2,8 @@ import { mainBounds } from "@/domain/line/bounds";
 import type { LyricLine } from "@/domain/line/model";
 import { isBracketedLine } from "@/domain/line/predicates";
 import { isSyncableLine } from "@/domain/line/sync-progress";
-import { applyUpdates, type GestureCommit } from "@/domain/sync/commit-gesture";
-import { prevSyncableLineIndex, type SyncCursor } from "@/domain/sync/cursor";
+import { type GestureCommit, applyUpdates } from "@/domain/sync/commit-gesture";
+import { type SyncCursor, prevSyncableLineIndex } from "@/domain/sync/cursor";
 
 // -- Types --------------------------------------------------------------------
 
@@ -33,7 +33,7 @@ function findUndoTarget(lines: readonly LyricLine[], cursor: SyncCursor): UndoTa
 
 function bracketAnchorLineIndex(lines: readonly LyricLine[], fromIndex: number): number {
   for (let i = Math.min(fromIndex, lines.length) - 1; i >= 0; i--) {
-    if (!isBracketedLine(lines[i]) && mainBegin(lines[i]) !== undefined) return i;
+    if (isSyncableLine(lines[i]) && !isBracketedLine(lines[i]) && mainBegin(lines[i]) !== undefined) return i;
   }
   return -1;
 }

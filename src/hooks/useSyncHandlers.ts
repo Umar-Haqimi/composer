@@ -79,12 +79,14 @@ function useSyncHandlers({
   const runGesture = useCallback(
     (gesture: SyncGesture): boolean => {
       const { defaultWordDuration, autoRewindForBracketedLines, redoPreroll } = useSettingsStore.getState();
+      // Overlap and auto-rewind need a closing tap per line, which only word granularity has.
+      const bracketRewind = autoRewindForBracketedLines && granularity === "word";
       const commit = commitGesture(lines, gesture, {
         cursor,
         jumped: !!syncState.jumpedToPosition,
         time: readTapTime(),
         defaultWordDuration,
-        overlapsPrevious: autoRewindForBracketedLines && overlapsPreviousLine(lines, cursor.lineIndex),
+        overlapsPrevious: bracketRewind && overlapsPreviousLine(lines, cursor.lineIndex),
       });
       if (!commit) return false;
       updateLinesWithHistory(commit.lineUpdates, { deriveText: false, propagateToSiblings: false });
@@ -93,7 +95,7 @@ function useSyncHandlers({
         toast(`Early tap snapped to ${formatTimeMs(commit.clampedTo)}`, { id: EARLY_TAP_TOAST_ID });
       }
       // A hold-tap has already opened the bracketed line's first word at the current time.
-      if (autoRewindForBracketedLines && gesture !== "hold-tap") {
+      if (bracketRewind && gesture !== "hold-tap") {
         const rewindTo = bracketRewindTime(lines, cursor, commit, redoPreroll);
         if (rewindTo !== null) {
           seekTo(rewindTo);
@@ -105,6 +107,7 @@ function useSyncHandlers({
     [
       lines,
       cursor,
+      granularity,
       syncState.jumpedToPosition,
       readTapTime,
       updateLinesWithHistory,

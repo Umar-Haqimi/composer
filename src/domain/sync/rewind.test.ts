@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
 import type { LyricLine } from "@/domain/line/model";
 import type { GestureCommit } from "@/domain/sync/commit-gesture";
 import { bracketAnchorLineIndex, bracketRewindTime, findUndoTarget, overlapsPreviousLine } from "@/domain/sync/rewind";
 import { createLine } from "@/test/factories";
+import { describe, expect, it } from "vitest";
 
 const word = (text: string, begin: number, end: number) => ({ text, begin, end });
 const timed = (id: string, text: string, begin: number) =>
@@ -62,6 +62,12 @@ describe("bracketAnchorLineIndex", () => {
 
   it("skips untimed lines", () => {
     const lines = [timed("a", "main", 2), untimed("b", "later"), untimed("c", "(bg)")];
+    expect(bracketAnchorLineIndex(lines, 2)).toBe(0);
+  });
+
+  it("never anchors on a timed blank line", () => {
+    const timedBlank = createLine({ id: "gap", text: "", begin: 3, end: 3.2 });
+    const lines = [timed("a", "main", 2), timedBlank, untimed("c", "(bg)")];
     expect(bracketAnchorLineIndex(lines, 2)).toBe(0);
   });
 
