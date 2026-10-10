@@ -6,12 +6,20 @@ import { createLine } from "@/test/factories";
 const word = (text: string, begin: number, end: number) => ({ text, begin, end });
 const DUR = 0.3;
 
-function run(lines: LyricLine[], gesture: SyncGesture, cursor: [number, number], time: number, jumped = false) {
+function run(
+  lines: LyricLine[],
+  gesture: SyncGesture,
+  cursor: [number, number],
+  time: number,
+  jumped = false,
+  overlapsPrevious = false,
+) {
   return commitGesture(lines, gesture, {
     cursor: { lineIndex: cursor[0], wordIndex: cursor[1] },
     jumped,
     time,
     defaultWordDuration: DUR,
+    overlapsPrevious,
   });
 }
 
@@ -501,7 +509,9 @@ describe("hold gestures · regressions", () => {
 
 describe("re-record after a jump · regressions", () => {
   it("regression: moves a late tapped word earlier and trims the word before it", () => {
-    const lines = [createLine({ id: "l0", text: "a b c", words: [word("a ", 1, 2), word("b ", 2, 3), word("c", 3, 3.3)] })];
+    const lines = [
+      createLine({ id: "l0", text: "a b c", words: [word("a ", 1, 2), word("b ", 2, 3), word("c", 3, 3.3)] }),
+    ];
     const commit = run(lines, "tap-word", [0, 1], 1.6, true);
     expect(commit?.clampedTo).toBeNull();
     expect(apply(lines, commit)[0].words).toEqual([word("a ", 1, 1.6), word("b ", 1.6, 1.6 + DUR), word("c", 3, 3.3)]);
@@ -540,7 +550,9 @@ describe("re-record after a jump · regressions", () => {
   });
 
   it("regression: leaves a zero-length word in the same line alone after a jump", () => {
-    const lines = [createLine({ id: "l0", text: "a b c", words: [word("a ", 1, 1), word("b ", 1, 2), word("c", 2, 3)] })];
+    const lines = [
+      createLine({ id: "l0", text: "a b c", words: [word("a ", 1, 1), word("b ", 1, 2), word("c", 2, 3)] }),
+    ];
     const after = apply(lines, run(lines, "tap-word", [0, 1], 1.5, true));
     expect(after[0].words?.[0]).toEqual(word("a ", 1, 1));
   });
@@ -556,5 +568,45 @@ describe("re-record after a jump · regressions", () => {
       createLine({ id: "l1", text: "b", words: [word("b", 3, 4)] }),
     ];
     expect(run(lines, "tap-word", [1, 0], 2.5, true)?.lineUpdates.map((u) => u.id)).toEqual(["l1"]);
+  });
+});
+
+describe("overlapsPrevious", () => {
+  const main = () =>
+    createLine({ id: "l0", text: "Hello world", words: [word("Hello ", 2, 2.5), word("world", 3, 3.3)] });
+  const bg = () => createLine({ id: "l1", text: "(ooh ah)" });
+
+  it("baseline: without the flag an overlapping tap snaps to the previous word and closes it", () => {
+    const commit = run([main(), bg()], "tap-word", [1, 0], 1);
+    expect(commit?.clampedTo).toBe(3);
+  });
+
+  it("lets the first word of an overlapping line land before the previous line's last word", () => {
+    const lines = [main(), bg()];
+    const commit = run(lines, "tap-word", [1, 0], 1, false, true);
+    expect(commit?.clampedTo).toBeNull();
+    const next = apply(lines, commit);
+    expect(next[1].words?.[0]).toMatchObject({ begin: 1, end: 1 + DUR });
+  });
+
+  it("leaves the previous line untouched", () => {
+    const lines = [main(), bg()];
+    const next = apply(lines, run(lines, "tap-word", [1, 0], 1, false, true));
+    expect(next[0].words).toEqual(lines[0].words);
+  });
+
+  it("still orders words within the overlapping line", () => {
+    const lines = [main(), createLine({ id: "l1", text: "(ooh ah)", words: [word("(ooh ", 1, 1.3)] })];
+    const commit = run(lines, "tap-word", [1, 1], 0.5, false, true);
+    expect(commit?.clampedTo).toBe(1);
+  });
+
+  it("applies to line granularity", () => {
+    const lines = [createLine({ id: "l0", text: "Hello world", begin: 2, end: 4 }), bg()];
+    const commit = run(lines, "tap-line", [1, 0], 1, false, true);
+    expect(commit?.clampedTo).toBeNull();
+    const next = apply(lines, commit);
+    expect(next[1].begin).toBe(1);
+    expect(next[0]).toMatchObject({ begin: 2, end: 4 });
   });
 });

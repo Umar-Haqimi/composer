@@ -1,6 +1,7 @@
 import { reconcileLine, type LooseLine, type LyricLine } from "@/domain/line/model";
 import { describe, expect, it } from "vitest";
-import { hasAnyTiming, hasMainLyrics, isLineSynced, isWordSynced } from "@/domain/line/predicates";
+import { hasAnyTiming, hasMainLyrics, isBracketedLine, isLineSynced, isWordSynced } from "@/domain/line/predicates";
+import { createLine } from "@/test/factories";
 
 // -- Helpers ------------------------------------------------------------------
 
@@ -129,5 +130,25 @@ describe("hasMainLyrics", () => {
     it("ignores background text", () => {
       expect(hasMainLyrics({ ...line(""), backgroundText: "ooh" })).toBe(false);
     });
+  });
+});
+
+describe("isBracketedLine", () => {
+  it.each([
+    ["(vocal)", true],
+    ["( vocal )", true],
+    ["  (ooh, ah)  ", true],
+    ["normal line", false],
+    ["(incomplete", false],
+    ["incomplete)", false],
+    ["()", true],
+    ["(", false],
+    ["", false],
+  ])("%j -> %s", (text, expected) => {
+    expect(isBracketedLine(createLine({ text }))).toBe(expected);
+  });
+
+  it("is false for a missing line", () => {
+    expect(isBracketedLine(undefined)).toBe(false);
   });
 });

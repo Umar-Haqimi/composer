@@ -17,6 +17,8 @@ interface GestureContext {
   jumped: boolean;
   time: number;
   defaultWordDuration: number;
+  // The cursor line is sung over the line before it, so that line neither floors nor gets closed by this tap.
+  overlapsPrevious?: boolean;
 }
 
 interface GestureCommit {
@@ -48,6 +50,7 @@ function closableSlot(lines: readonly LyricLine[], slot: SyncSlot): SyncSlot {
 function anchorBefore(lines: readonly LyricLine[], ctx: GestureContext, granularity: "line" | "word"): Anchor {
   const previous = previousSlot(lines, ctx.cursor, granularity);
   if (!previous) return { slot: null, floor: 0 };
+  if (ctx.overlapsPrevious && previous.lineIndex !== ctx.cursor.lineIndex) return { slot: null, floor: 0 };
   const slot = closableSlot(lines, previous);
   const bounds = slotBounds(lines, slot);
   if (!bounds) return { slot: null, floor: 0 };
@@ -259,5 +262,5 @@ function commitGesture(lines: readonly LyricLine[], gesture: SyncGesture, ctx: G
 
 // -- Exports ------------------------------------------------------------------
 
-export { commitGesture };
+export { applyUpdates, commitGesture };
 export type { GestureCommit, SyncGesture };

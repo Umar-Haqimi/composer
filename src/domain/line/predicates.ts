@@ -19,6 +19,13 @@ function hasMainLyrics(line: LyricLine): boolean {
   return stripSplitCharacter(line.text).trim().length > 0;
 }
 
+// A whole line wrapped in parentheses is a background vocal that overlaps the main line before it.
+function isBracketedLine(line: LyricLine | undefined): boolean {
+  if (!line) return false;
+  const text = line.text.trim();
+  return text.length >= 2 && text.startsWith("(") && text.endsWith(")");
+}
+
 // -- Exports ------------------------------------------------------------------
 
-export { hasAnyTiming, hasMainLyrics, isLineSynced, isWordSynced };
+export { hasAnyTiming, hasMainLyrics, isBracketedLine, isLineSynced, isWordSynced };
