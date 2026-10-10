@@ -9,7 +9,7 @@ describe("SettingsSectionRows (sync)", () => {
     await expect.element(screen.getByText("Split character")).toBeInTheDocument();
     await expect.element(screen.getByText("Re-record pre-roll")).toBeInTheDocument();
     await expect.element(screen.getByRole("button", { name: "Default granularity" })).toBeInTheDocument();
-    expect(screen.container.querySelectorAll('input[type="range"]').length).toBe(4);
+    expect(screen.container.querySelectorAll('input[type="range"]').length).toBe(5);
   });
 
   it("updates the default granularity from the select", async () => {
