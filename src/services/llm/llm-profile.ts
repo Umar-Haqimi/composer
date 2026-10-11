@@ -37,5 +37,5 @@ function createLlmProfile(preset: LlmPreset, id: string = crypto.randomUUID()): 
 
 // -- Exports ------------------------------------------------------------------
 
-export { createLlmProfile, DEFAULT_MAX_LINES_PER_REQUEST, OLLAMA_BASE_URL };
+export { createLlmProfile };
 export type { LlmPreset, LlmProfile };

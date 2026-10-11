@@ -131,4 +131,4 @@ function parseTranslationResponse(
 // -- Exports ------------------------------------------------------------------
 
 export { buildTranslationMessages, DEFAULT_TRANSLATION_INSTRUCTIONS, parseTranslationResponse };
-export type { PromptItem, TranslationPromptInput };
+export type { PromptItem };

@@ -98,4 +98,4 @@ async function listModels(request: LlmEndpoint & { signal?: AbortSignal }): Prom
 // -- Exports ------------------------------------------------------------------
 
 export { chatJson, listModels, LlmRequestError };
-export type { ChatMessage, LlmEndpoint, LlmErrorKind };
+export type { ChatMessage };
