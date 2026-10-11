@@ -1,3 +1,11 @@
+import {
+  GOOGLE_TRANSLATION_PROVIDER,
+  LLM_PROFILES_DEFAULTS,
+  type LlmProfilesActions,
+  type LlmProfilesState,
+  llmProfilesActions,
+  migrateLlmProfiles,
+} from "@/stores/settings-llm-profiles";
 import { DEFAULT_BRIDGE_URL } from "@/utils/composer-bridge-api";
 import { PREVIEW_SIDEBAR_WIDTH } from "@/utils/preview-sidebar-width";
 import { DEFAULT_MIN_WORD_DURATION } from "@/utils/word-spaces";
@@ -29,7 +37,7 @@ interface CobaltInstanceStatus {
 
 const DEFAULT_COBALT_INSTANCE_ID = "default";
 
-interface SettingsState {
+interface SettingsState extends LlmProfilesState {
   defaultPlaybackRate: number;
   preservePitch: boolean;
   rememberVolume: boolean;
@@ -92,7 +100,7 @@ interface SettingsState {
   composerBridgeUrl: string;
 }
 
-interface SettingsActions {
+interface SettingsActions extends LlmProfilesActions {
   set: <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => void;
   resetToDefaults: () => void;
   addCobaltInstance: (instance: Omit<CobaltInstance, "id">) => void;
@@ -165,6 +173,7 @@ const DEFAULTS: SettingsState = {
 
   experiments: { youtubeBridge: false },
   composerBridgeUrl: DEFAULT_BRIDGE_URL,
+  ...LLM_PROFILES_DEFAULTS,
 };
 
 const BUILTIN_COBALT_INSTANCE: CobaltInstance = {
@@ -173,7 +182,7 @@ const BUILTIN_COBALT_INSTANCE: CobaltInstance = {
   url: "https://cobalt.boidu.dev",
 };
 
-const SETTINGS_PERSIST_VERSION = 6;
+const SETTINGS_PERSIST_VERSION = 7;
 
 function migrateSettings(persistedState: unknown, version: number): unknown {
   if (!persistedState || typeof persistedState !== "object") return persistedState;
@@ -190,6 +199,7 @@ function migrateSettings(persistedState: unknown, version: number): unknown {
   // The key predates the default flip, so every old blob carries an explicit
   // false that a plain undefined guard would never reach.
   if (version < 6) next.preserveBracketsOnExtraction = true;
+  migrateLlmProfiles(next);
   return next;
 }
 
@@ -199,6 +209,7 @@ const useSettingsStore = create<SettingsState & SettingsActions>()(
   persist(
     (set) => ({
       ...DEFAULTS,
+      ...llmProfilesActions(set),
 
       set: (key, value) => set({ [key]: value }),
       resetToDefaults: () =>
@@ -220,6 +231,8 @@ const useSettingsStore = create<SettingsState & SettingsActions>()(
           cobaltInstanceStatus: state.cobaltInstanceStatus,
           experiments: state.experiments,
           composerBridgeUrl: state.composerBridgeUrl,
+          llmProfiles: state.llmProfiles,
+          translationProvider: state.translationProvider,
         })),
       addCobaltInstance: (instance) =>
         set((state) => {
@@ -272,6 +285,7 @@ function isUsingDefaultCobaltInstance(): boolean {
 export {
   useSettingsStore,
   DEFAULTS,
+  GOOGLE_TRANSLATION_PROVIDER,
   BUILTIN_COBALT_INSTANCE,
   DEFAULT_COBALT_INSTANCE_ID,
   getActiveCobaltInstance,
