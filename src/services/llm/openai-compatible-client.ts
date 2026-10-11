@@ -1,3 +1,5 @@
+import { trimTrailingSlashes } from "@/utils/url";
+
 // -- Types --------------------------------------------------------------------
 
 type LlmErrorKind = "network" | "auth" | "not-found" | "http" | "bad-response";
@@ -27,7 +29,7 @@ class LlmRequestError extends Error {
 // -- Helpers ------------------------------------------------------------------
 
 function endpointUrl(baseUrl: string, path: string): string {
-  return `${baseUrl.trim().replace(/\/+$/, "")}/${path}`;
+  return `${trimTrailingSlashes(baseUrl.trim())}/${path}`;
 }
 
 function requestHeaders(apiKey: string): Headers {

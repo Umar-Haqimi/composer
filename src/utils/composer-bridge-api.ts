@@ -2,6 +2,8 @@
 // users run locally to extract YouTube audio through their residential IP.
 // See `experiments/composer-bridge/README.md` for what the binary is.
 
+import { trimTrailingSlashes } from "@/utils/url";
+
 const DEFAULT_BRIDGE_URL = "http://localhost:7777";
 const HEALTH_QUERY_KEY = "composer-bridge-health";
 const HEALTH_TIMEOUT_MS = 1500;
@@ -52,7 +54,7 @@ class BridgeError extends Error {
 }
 
 function normalizeBaseUrl(url: string): string {
-  return url.replace(/\/+$/, "");
+  return trimTrailingSlashes(url);
 }
 
 // decodeHeader undoes the percent-encoding the bridge applies to UTF-8 header

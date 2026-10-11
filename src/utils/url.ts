@@ -19,6 +19,10 @@ function displayHostFromUrl(url: string): string {
   return url.replace(/^https?:\/\//i, "").replace(/\/$/, "");
 }
 
+function trimTrailingSlashes(url: string): string {
+  return url.replace(/\/+$/, "");
+}
+
 // -- Exports -------------------------------------------------------------------
 
-export { ensureHttpScheme, isValidHttpUrl, displayHostFromUrl };
+export { ensureHttpScheme, isValidHttpUrl, displayHostFromUrl, trimTrailingSlashes };
