@@ -121,6 +121,26 @@ describe("createLlmTranslationProvider", () => {
     expect(result.background).toEqual([{ id: "c", text: "B2" }]);
   });
 
+  it("skips a blank main line without sending it or retrying, and still translates its background", async () => {
+    const prompts = stubReplies({ "1b": "B2" });
+    const result = await createLlmTranslationProvider(PROFILE).translate(
+      request({ main: [{ id: "c", text: "" }], background: [{ id: "c", text: "bg two" }] }),
+    );
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain(JSON.stringify({ "1b": "bg two" }, null, 2));
+    expect(result.main).toEqual([{ id: "c", text: null }]);
+    expect(result.background).toEqual([{ id: "c", text: "B2" }]);
+  });
+
+  it("makes no request and returns null results when every line is blank", async () => {
+    const prompts = stubReplies();
+    const result = await createLlmTranslationProvider(PROFILE).translate(
+      request({ main: [{ id: "c", text: "  " }], background: [] }),
+    );
+    expect(prompts).toHaveLength(0);
+    expect(result).toEqual({ detectedLanguage: "", main: [{ id: "c", text: null }], background: [] });
+  });
+
   it("returns empty results without a request when there is nothing to translate", async () => {
     const prompts = stubReplies();
     const result = await createLlmTranslationProvider(PROFILE).translate(request({ main: [], background: [] }));

@@ -55,6 +55,11 @@ function packChunks(groups: KeyedItem[][], maxItems: number): KeyedItem[][] {
   return chunks;
 }
 
+/** Blank source lines have nothing to translate, so they are never sent to the model. */
+function isBlank(text: string): boolean {
+  return text.trim() === "";
+}
+
 function isAbort(error: unknown): boolean {
   return (error as Error)?.name === "AbortError";
 }
@@ -85,7 +90,10 @@ function createLlmTranslationProvider(profile: LlmProfile): TranslationProvider 
   return {
     id: `llm:${profile.id}`,
     async translate(request): Promise<TranslationResponse> {
-      const groups = keyedGroups(request.main, request.background);
+      const everyGroup = keyedGroups(request.main, request.background);
+      const groups = everyGroup
+        .map((group) => group.filter((item) => !isBlank(item.text)))
+        .filter((group) => group.length > 0);
       const allItems = groups.flat();
       const chunks = packChunks(groups, Math.max(1, profile.maxLinesPerRequest));
       const translations = new Map<string, string>();
@@ -132,14 +140,16 @@ function createLlmTranslationProvider(profile: LlmProfile): TranslationProvider 
       }
 
       const resultFor = (item: KeyedItem): TranslationLineResult => {
+        if (isBlank(item.text)) return { id: item.id, text: null };
         const text = translations.get(item.key);
         if (text === undefined) return { id: item.id, text: null, failed: true };
         return { id: item.id, text: sameAsSource(text, item.text) ? null : text };
       };
+      const everyItem = everyGroup.flat();
       return {
         detectedLanguage,
-        main: allItems.filter((item) => item.slot === "main").map(resultFor),
-        background: allItems.filter((item) => item.slot === "background").map(resultFor),
+        main: everyItem.filter((item) => item.slot === "main").map(resultFor),
+        background: everyItem.filter((item) => item.slot === "background").map(resultFor),
       };
     },
   };
