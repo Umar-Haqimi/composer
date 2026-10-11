@@ -13,6 +13,7 @@ function llmErrorMessage(error: LlmRequestError, profile: LlmProfile): string {
     case "auth":
       return `${name} rejected the API key.`;
     case "not-found":
+      if (!profile.model.trim()) return `${name} returned 404. Check the base URL.`;
       return `Model "${profile.model}" not found on ${name}. Check the model and base URL.`;
     case "bad-response":
       return `${name} returned unreadable output. Try Regenerate or another model.`;

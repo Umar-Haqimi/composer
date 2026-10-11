@@ -19,6 +19,15 @@ type ConnectionState =
   | { status: "ok"; models: string[] }
   | { status: "error"; message: string };
 
+// -- Helpers ------------------------------------------------------------------
+
+/** A 404 from the model list means the base URL is off (usually a missing /v1), not a missing model. */
+function connectionErrorMessage(error: unknown, profile: LlmProfile): string {
+  if (!(error instanceof LlmRequestError)) return "Connection test failed.";
+  if (error.kind === "not-found") return "No model list at this URL. Check the base URL (it usually ends in /v1).";
+  return llmErrorMessage(error, profile);
+}
+
 // -- Component ----------------------------------------------------------------
 
 const LlmProfileForm: React.FC<{
@@ -40,7 +49,7 @@ const LlmProfileForm: React.FC<{
       const models = await listModels({ baseUrl: ensureHttpScheme(draft.baseUrl), apiKey: draft.apiKey });
       setConnection({ status: "ok", models });
     } catch (error) {
-      const message = error instanceof LlmRequestError ? llmErrorMessage(error, draft) : "Connection test failed.";
+      const message = connectionErrorMessage(error, draft);
       setConnection({ status: "error", message });
     }
   };

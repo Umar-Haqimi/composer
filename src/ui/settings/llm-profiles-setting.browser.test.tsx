@@ -49,6 +49,19 @@ describe("LlmProfilesSetting", () => {
     await expect.element(screen.getByText(/OLLAMA_ORIGINS/)).toBeInTheDocument();
   });
 
+  it("points at the base URL when the model list returns 404", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("missing", { status: 404 })),
+    );
+    const screen = await render(<LlmProfilesSetting />);
+    await screen.getByRole("button", { name: "Add Ollama profile" }).click();
+    await screen.getByRole("button", { name: "Test connection" }).click();
+    await expect
+      .element(screen.getByText("No model list at this URL. Check the base URL (it usually ends in /v1)."))
+      .toBeInTheDocument();
+  });
+
   it("removes a profile and falls back to Google", async () => {
     const id = useSettingsStore.getState().addLlmProfile("ollama", { label: "Local", model: "m" });
     useSettingsStore.getState().selectTranslationProvider(id);

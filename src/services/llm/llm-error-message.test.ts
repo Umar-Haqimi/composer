@@ -17,6 +17,13 @@ describe("llmErrorMessage", () => {
     expect(llmErrorMessage(new LlmRequestError("network", "x"), HOSTED)).not.toContain("OLLAMA_ORIGINS");
   });
 
+  it("does not name an empty model on a 404", () => {
+    const blank = { ...HOSTED, model: "  " };
+    expect(llmErrorMessage(new LlmRequestError("not-found", "x", 404), blank)).toBe(
+      "Hosted returned 404. Check the base URL.",
+    );
+  });
+
   it.each([
     ["auth", 401, "Hosted rejected the API key."],
     ["not-found", 404, 'Model "m2" not found on Hosted. Check the model and base URL.'],
