@@ -1,6 +1,7 @@
 import type { SettingsState } from "@/stores/settings";
 import type { SettingEntry } from "@/stores/settings-catalog";
 import { SYNC_UNDO_REWIND_ENTRIES } from "@/stores/settings-catalog-sync-entries";
+import { TRANSLATION_ENTRIES } from "@/stores/settings-catalog-translation-entries";
 import { MOD_KEY } from "@/utils/platform";
 
 // -- Catalog -------------------------------------------------------------------
@@ -197,6 +198,7 @@ const SETTINGS_CATALOG = {
     description: "Whether new projects start in word or line timing mode.",
     settingKey: "defaultGranularity",
   },
+  ...TRANSLATION_ENTRIES,
   confirmReplaceProjectFromHash: {
     section: "confirmations",
     label: "Confirm replacing project from URL",

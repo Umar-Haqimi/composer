@@ -3,6 +3,7 @@ import type { SettingId } from "@/stores/settings-catalog";
 import { BridgeSection } from "@/ui/settings/bridge-section";
 import { CobaltInstancesSetting } from "@/ui/settings/cobalt-instances-setting";
 import { DefaultPlaybackRateSetting } from "@/ui/settings/default-playback-rate-setting";
+import { LlmProfilesSetting } from "@/ui/settings/llm-profiles-setting";
 import type { SelectOption, SliderAction } from "@/ui/settings/setting-controls";
 import { SplitCharacterSetting } from "@/ui/settings/split-character-setting";
 import { ThemeSettings } from "@/ui/settings/theme/theme-settings";
@@ -115,6 +116,7 @@ const SETTING_CONTROLS: Record<SettingId, SettingControl> = {
   },
   youtubeBridge: { kind: "custom", Component: BridgeSection },
   cobaltInstances: { kind: "custom", Component: CobaltInstancesSetting },
+  llmProfiles: { kind: "custom", Component: LlmProfilesSetting },
 };
 
 // -- Exports -------------------------------------------------------------------

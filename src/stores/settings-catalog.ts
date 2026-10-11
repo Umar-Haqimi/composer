@@ -9,6 +9,7 @@ type SettingsSectionId =
   | "playback"
   | "timeline"
   | "sync"
+  | "translation"
   | "shortcuts"
   | "confirmations"
   | "storage"
@@ -36,6 +37,7 @@ const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { id: "playback", label: "Playback" },
   { id: "timeline", label: "Timeline" },
   { id: "sync", label: "Sync & Timing" },
+  { id: "translation", label: "Translation" },
   { id: "shortcuts", label: "Shortcuts" },
   { id: "confirmations", label: "Confirmations" },
   { id: "storage", label: "Save & Storage" },

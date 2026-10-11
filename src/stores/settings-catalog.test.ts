@@ -54,6 +54,12 @@ describe("SETTINGS_CATALOG", () => {
   });
 
   describe("regressions", () => {
+    it("lists LLM profiles under Translation, right after Sync & Timing", () => {
+      expect(settingIdsInSection("translation")).toEqual(["llmProfiles"]);
+      const order = SETTINGS_SECTIONS.map((section) => section.id);
+      expect(order.indexOf("translation")).toBe(order.indexOf("sync") + 1);
+    });
+
     it("regression: lists the group deletion prompt under Confirmations", () => {
       expect(settingIdsInSection("confirmations")).toContain("confirmGroupDissolution");
     });
