@@ -1,8 +1,6 @@
 import { pastedRows } from "@/domain/language/paste-import";
 import { googleLanguageProvider } from "@/services/google-language-provider";
-import { llmErrorMessage } from "@/services/llm/llm-error-message";
 import type { LlmProfile } from "@/services/llm/llm-profile";
-import { LlmRequestError } from "@/services/llm/openai-compatible-client";
 import { resolveTranslationProvider } from "@/services/resolve-translation-provider";
 import { useProjectStore } from "@/stores/project";
 import { useSettingsStore } from "@/stores/settings";
@@ -18,7 +16,13 @@ import { LanguageLineEditor } from "@/views/languages/line-editor";
 import { mergeGeneratedLanguageUpdates } from "@/views/languages/merge-generated-language-updates";
 import { PasteImportModal } from "@/views/languages/paste-import-modal";
 import { RegenerateLanguageControl } from "@/views/languages/regenerate-language-control";
-import { runTranslations } from "@/views/languages/run-translations";
+import {
+  generationFailureMessage,
+  hasFailedLines,
+  runTranslations,
+  translationContext,
+  translationPairs,
+} from "@/views/languages/run-translations";
 import { LanguageStatusSummaries } from "@/views/languages/status-summaries";
 import { MissingModelNotice, TranslationProviderSelect } from "@/views/languages/translation-provider-select";
 import { useLanguageTargets } from "@/views/languages/use-language-targets";
@@ -69,7 +73,7 @@ const LanguagesPanel: React.FC = () => {
         // An LLM profile without a model can't translate; the notice explains why.
         const translationTargets = profile && !profile.model.trim() ? [] : requestedTargets;
         const { mainInputs, bgInputs } = languageGenerationInputs(startingState.lines);
-        const [romanizationResults, translationResults] = await Promise.all([
+        const [romanizationResults, translationRun] = await Promise.all([
           includeTransliteration
             ? Promise.all([
                 googleLanguageProvider.transliterate(mainInputs, requestedSource, controller.signal),
@@ -84,11 +88,7 @@ const LanguagesPanel: React.FC = () => {
               background: bgInputs,
               targetLanguage,
               sourceLanguage: requestedSource,
-              context: {
-                title: startingState.metadata.title,
-                artists: startingState.metadata.artists,
-                album: startingState.metadata.album,
-              },
+              context: translationContext(startingState.metadata),
               signal: controller.signal,
             }),
             profile !== undefined,
@@ -104,14 +104,12 @@ const LanguagesPanel: React.FC = () => {
         ) {
           return;
         }
-        if (
-          [
-            ...(romanizationResults ?? []).map((batch) => batch.lines),
-            ...translationResults.flatMap((batch) => [batch.main, batch.background]),
-          ].some((results) => results.some((result) => result.failed))
-        ) {
-          toast.error("Couldn't generate some lines. Try Regenerate.");
-        }
+        const failure = generationFailureMessage(
+          translationRun.error,
+          profile,
+          hasFailedLines(romanizationResults ?? [], translationRun.results),
+        );
+        if (failure) toast.error(failure);
         const romanMain = romanizationResults?.[0];
         const romanBg = romanizationResults?.[1];
         const transliterationGeneration = romanMain
@@ -122,27 +120,21 @@ const LanguagesPanel: React.FC = () => {
               background: new Map(romanBg?.lines.map((result) => [result.id, result]) ?? []),
             }
           : undefined;
-        const translationPairs = translationTargets.map((language, index) => ({
-          language,
-          main: new Map(translationResults[index].main.map((result) => [result.id, result])),
-          background: new Map(translationResults[index].background.map((result) => [result.id, result])),
-        }));
         const updates = mergeGeneratedLanguageUpdates(
           startingLines,
           currentState.lines,
           targetsRef.current,
-          { force, transliteration: transliterationGeneration, translations: translationPairs },
+          { force, transliteration: transliterationGeneration, translations: translationPairs(translationRun.results) },
           edits,
         );
         if (updates.length > 0) updateLinesWithHistory(updates, { deriveText: false, propagateToSiblings: false });
-        const detected = romanMain?.detectedLanguage || translationResults[0]?.detectedLanguage;
+        const detected = romanMain?.detectedLanguage || translationRun.results[0]?.response.detectedLanguage;
         if (updates.length > 0 && !currentState.metadata.language && detected && detected !== "auto") {
           setMetadata({ language: detected });
         }
       } catch (error) {
         if ((error as Error).name === "AbortError") return;
-        if (error instanceof LlmRequestError && activeProfile) toast.error(llmErrorMessage(error, activeProfile));
-        else toast.error("Couldn't generate some lines. Try Regenerate.");
+        toast.error(generationFailureMessage(error, activeProfile, true));
       } finally {
         stop();
         if (abortRef.current === controller) {

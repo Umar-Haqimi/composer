@@ -3,6 +3,7 @@ import { useProjectStore } from "@/stores/project";
 import { useSettingsStore } from "@/stores/settings";
 import { render } from "@/test/render";
 import { LanguagesPanel } from "@/views/languages";
+import { Toaster } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 function mockGoogle() {
@@ -84,5 +85,26 @@ describe("Languages translation provider", () => {
     await expect.element(screen.getByRole("textbox", { name: "Transliteration", exact: true })).toHaveValue("romaji");
     expect(fetchMock).not.toHaveBeenCalled();
     expect(translate).not.toHaveBeenCalled();
+  });
+
+  it("keeps the transliteration and shows a toast when the LLM request fails", async () => {
+    mockGoogle();
+    const id = useSettingsStore.getState().addLlmProfile("ollama", { label: "Local model", model: "m" });
+    useSettingsStore.getState().selectTranslationProvider(id);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+    const screen = await render(
+      <>
+        <Toaster />
+        <LanguagesPanel />
+      </>,
+    );
+    await expect.element(screen.getByRole("textbox", { name: "Transliteration", exact: true })).toHaveValue("romaji");
+    await expect.poll(() => document.body.textContent).toMatch(/Couldn't reach Local model/);
+    expect(document.body.textContent).not.toMatch(/Couldn't generate some lines/);
   });
 });
