@@ -28,6 +28,12 @@ function connectionErrorMessage(error: unknown, profile: LlmProfile): string {
   return llmErrorMessage(error, profile);
 }
 
+/** Hosted catalogues list hundreds of models, so the buttons narrow to what is typed in Model. */
+function matchingModels(models: string[], typed: string): string[] {
+  const needle = typed.trim().toLowerCase();
+  return models.filter((model) => model === typed || model.toLowerCase().includes(needle));
+}
+
 // -- Component ----------------------------------------------------------------
 
 const LlmProfileForm: React.FC<{
@@ -133,8 +139,12 @@ const LlmProfileForm: React.FC<{
         )}
       </div>
       {connection.status === "ok" && connection.models.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {connection.models.map((model) => (
+        <div
+          role="group"
+          aria-label="Choices from the server"
+          className="flex flex-wrap gap-1 max-h-32 overflow-y-auto"
+        >
+          {matchingModels(connection.models, draft.model).map((model) => (
             <Button
               key={model}
               size="sm"

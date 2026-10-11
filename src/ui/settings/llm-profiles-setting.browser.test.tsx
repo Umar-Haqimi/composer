@@ -36,6 +36,22 @@ describe("LlmProfilesSetting", () => {
     await expect.element(screen.getByLabelText("Model")).toHaveValue("beta");
   });
 
+  it("filters the model list by the Model text inside a scrollable box", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ data: [{ id: "alpha" }, { id: "Beta-large" }, { id: "gamma" }] })),
+    );
+    const screen = await render(<LlmProfilesSetting />);
+    await screen.getByRole("button", { name: "Add Ollama profile" }).click();
+    await screen.getByRole("button", { name: "Test connection" }).click();
+    await expect.element(screen.getByRole("button", { name: "gamma" })).toBeInTheDocument();
+    await screen.getByLabelText("Model").fill("BETA");
+    await expect.element(screen.getByRole("button", { name: "Beta-large" })).toBeInTheDocument();
+    await expect.element(screen.getByRole("button", { name: "alpha" })).not.toBeInTheDocument();
+    await expect.element(screen.getByRole("button", { name: "gamma" })).not.toBeInTheDocument();
+    await expect.element(screen.getByRole("group", { name: "Choices from the server" })).toHaveClass("overflow-y-auto");
+  });
+
   it("shows the Ollama origin hint when the server is unreachable", async () => {
     vi.stubGlobal(
       "fetch",
