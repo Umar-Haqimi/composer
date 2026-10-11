@@ -1,6 +1,11 @@
 import { pastedRows } from "@/domain/language/paste-import";
 import { googleLanguageProvider } from "@/services/google-language-provider";
+import { llmErrorMessage } from "@/services/llm/llm-error-message";
+import type { LlmProfile } from "@/services/llm/llm-profile";
+import { LlmRequestError } from "@/services/llm/openai-compatible-client";
+import { resolveTranslationProvider } from "@/services/resolve-translation-provider";
 import { useProjectStore } from "@/stores/project";
+import { useSettingsStore } from "@/stores/settings";
 import { EmptyState } from "@/ui/empty-state";
 import { Scroll } from "@/ui/scroll";
 import { Select } from "@/ui/select";
@@ -15,6 +20,7 @@ import { PasteImportModal } from "@/views/languages/paste-import-modal";
 import { RegenerateLanguageControl } from "@/views/languages/regenerate-language-control";
 import { runTranslations } from "@/views/languages/run-translations";
 import { LanguageStatusSummaries } from "@/views/languages/status-summaries";
+import { MissingModelNotice, TranslationProviderSelect } from "@/views/languages/translation-provider-select";
 import { useLanguageTargets } from "@/views/languages/use-language-targets";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -56,7 +62,12 @@ const LanguagesPanel: React.FC = () => {
       abortRef.current = controller;
       const { edits, stop } = watchGenerationEdits(startingLines, requestedTargets, controller.signal);
       setIsGenerating(true);
+      let activeProfile: LlmProfile | undefined;
       try {
+        const { provider, profile } = resolveTranslationProvider(useSettingsStore.getState());
+        activeProfile = profile;
+        // An LLM profile without a model can't translate; the notice explains why.
+        const translationTargets = profile && !profile.model.trim() ? [] : requestedTargets;
         const { mainInputs, bgInputs } = languageGenerationInputs(startingState.lines);
         const [romanizationResults, translationResults] = await Promise.all([
           includeTransliteration
@@ -66,8 +77,8 @@ const LanguagesPanel: React.FC = () => {
               ])
             : Promise.resolve(null),
           runTranslations(
-            googleLanguageProvider,
-            requestedTargets,
+            provider,
+            translationTargets,
             (targetLanguage) => ({
               main: mainInputs,
               background: bgInputs,
@@ -80,7 +91,7 @@ const LanguagesPanel: React.FC = () => {
               },
               signal: controller.signal,
             }),
-            false,
+            profile !== undefined,
           ),
         ]);
         const currentState = useProjectStore.getState();
@@ -111,7 +122,7 @@ const LanguagesPanel: React.FC = () => {
               background: new Map(romanBg?.lines.map((result) => [result.id, result]) ?? []),
             }
           : undefined;
-        const translationPairs = requestedTargets.map((language, index) => ({
+        const translationPairs = translationTargets.map((language, index) => ({
           language,
           main: new Map(translationResults[index].main.map((result) => [result.id, result])),
           background: new Map(translationResults[index].background.map((result) => [result.id, result])),
@@ -129,7 +140,9 @@ const LanguagesPanel: React.FC = () => {
           setMetadata({ language: detected });
         }
       } catch (error) {
-        if ((error as Error).name !== "AbortError") toast.error("Couldn't generate some lines. Try Regenerate.");
+        if ((error as Error).name === "AbortError") return;
+        if (error instanceof LlmRequestError && activeProfile) toast.error(llmErrorMessage(error, activeProfile));
+        else toast.error("Couldn't generate some lines. Try Regenerate.");
       } finally {
         stop();
         if (abortRef.current === controller) {
@@ -214,6 +227,7 @@ const LanguagesPanel: React.FC = () => {
           </span>
         </div>
         <div className="flex items-center gap-2">
+          <TranslationProviderSelect disabled={isGenerating} />
           <span className="text-sm text-composer-text-muted">Source</span>
           <Select
             aria-label="Source language"
@@ -242,6 +256,7 @@ const LanguagesPanel: React.FC = () => {
         onAdd={addTarget}
         onRemove={removeTarget}
       />
+      <MissingModelNotice />
 
       <Scroll className="flex-1">
         <LanguageStatusSummaries lines={lines} languageNames={languageName} />
