@@ -6,9 +6,12 @@ import {
   parseGoogleTransliterationResponse,
 } from "@/services/google-language-response";
 import type {
-  LanguageProvider,
-  TranslationBatchResult,
+  LanguageLineInput,
+  TranslationLineResult,
+  TranslationProvider,
+  TranslationResponse,
   TransliterationBatchResult,
+  TransliterationProvider,
 } from "@/services/language-provider";
 
 const API = "https://translate.googleapis.com/translate_a/single";
@@ -152,19 +155,36 @@ async function settleWithLimit<T, R>(items: T[], worker: (item: T) => Promise<R>
   return results;
 }
 
-const googleLanguageProvider: LanguageProvider = {
+async function translateBatch(
+  lines: LanguageLineInput[],
+  targetLanguage: string,
+  sourceLanguage: string | undefined,
+  signal?: AbortSignal,
+): Promise<{ detectedLanguage: string; lines: TranslationLineResult[] }> {
+  const source = googleLanguageCode(sourceLanguage || "auto");
+  const target = googleLanguageCode(targetLanguage);
+  const results = await settleWithLimit(lines, (line) => translateOne(line.text, target, source, signal));
+  return {
+    detectedLanguage: results.find((result) => result?.detectedLanguage)?.detectedLanguage ?? "",
+    lines: lines.map((line, index) => ({
+      id: line.id,
+      text: results[index]?.text ?? null,
+      ...(results[index] === null ? { failed: true } : {}),
+    })),
+  };
+}
+
+const googleLanguageProvider: TranslationProvider & TransliterationProvider = {
   id: "google-gtx",
-  async translate(lines, targetLanguage, sourceLanguage, signal): Promise<TranslationBatchResult> {
-    const source = googleLanguageCode(sourceLanguage || "auto");
-    const target = googleLanguageCode(targetLanguage);
-    const results = await settleWithLimit(lines, (line) => translateOne(line.text, target, source, signal));
+  async translate({ main, background, targetLanguage, sourceLanguage, signal }): Promise<TranslationResponse> {
+    const [mainBatch, backgroundBatch] = await Promise.all([
+      translateBatch(main, targetLanguage, sourceLanguage, signal),
+      translateBatch(background, targetLanguage, sourceLanguage, signal),
+    ]);
     return {
-      detectedLanguage: results.find((result) => result?.detectedLanguage)?.detectedLanguage ?? "",
-      lines: lines.map((line, index) => ({
-        id: line.id,
-        text: results[index]?.text ?? null,
-        ...(results[index] === null ? { failed: true } : {}),
-      })),
+      detectedLanguage: mainBatch.detectedLanguage || backgroundBatch.detectedLanguage,
+      main: mainBatch.lines,
+      background: backgroundBatch.lines,
     };
   },
   async transliterate(lines, sourceLanguage, signal): Promise<TransliterationBatchResult> {

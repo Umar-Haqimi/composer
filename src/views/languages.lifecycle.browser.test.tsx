@@ -2,12 +2,12 @@ import { languageSourceFingerprint } from "@/domain/language/fingerprint";
 import type { LyricLine } from "@/domain/line/model";
 import { googleLanguageProvider } from "@/services/google-language-provider";
 import { useProjectStore } from "@/stores/project";
+import { installStyleSheet } from "@/test/browser-css";
+import { stepFrames } from "@/test/frame-steps";
+import { render } from "@/test/render";
 import { LanguagesPanel } from "@/views/languages";
 import { Activity } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render } from "@/test/render";
-import { installStyleSheet } from "@/test/browser-css";
-import { stepFrames } from "@/test/frame-steps";
 
 const source = "こんにちは";
 
@@ -59,13 +59,14 @@ describe("language generation lifecycle", () => {
         ? new Promise((resolve) => pending.push(() => resolve(result)))
         : Promise.resolve(result);
     });
-    vi.spyOn(googleLanguageProvider, "translate").mockImplementation((lines, language) => {
-      if (lines.length > 0) requestedTargets.push(language);
+    vi.spyOn(googleLanguageProvider, "translate").mockImplementation((request) => {
+      if (request.main.length > 0) requestedTargets.push(request.targetLanguage);
       const result = {
         detectedLanguage: "ja",
-        lines: lines.map((line) => ({ id: line.id, text: "Generated translation" })),
+        main: request.main.map((line) => ({ id: line.id, text: "Generated translation" })),
+        background: request.background.map((line) => ({ id: line.id, text: "Generated translation" })),
       };
-      return defer && lines.length > 0
+      return defer && request.main.length > 0
         ? new Promise((resolve) => pending.push(() => resolve(result)))
         : Promise.resolve(result);
     });

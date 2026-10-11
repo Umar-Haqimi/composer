@@ -4,6 +4,7 @@ import { useProjectStore } from "@/stores/project";
 import { EmptyState } from "@/ui/empty-state";
 import { Scroll } from "@/ui/scroll";
 import { Select } from "@/ui/select";
+import { pluralize } from "@/utils/pluralize";
 import { watchGenerationEdits } from "@/views/languages/generation-edit-guard";
 import { languageGenerationInputs } from "@/views/languages/generation-inputs";
 import { LANGUAGE_OPTIONS, SOURCE_LANGUAGE_OPTIONS } from "@/views/languages/language-options";
@@ -12,9 +13,9 @@ import { LanguageLineEditor } from "@/views/languages/line-editor";
 import { mergeGeneratedLanguageUpdates } from "@/views/languages/merge-generated-language-updates";
 import { PasteImportModal } from "@/views/languages/paste-import-modal";
 import { RegenerateLanguageControl } from "@/views/languages/regenerate-language-control";
+import { runTranslations } from "@/views/languages/run-translations";
 import { LanguageStatusSummaries } from "@/views/languages/status-summaries";
 import { useLanguageTargets } from "@/views/languages/use-language-targets";
-import { pluralize } from "@/utils/pluralize";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -64,11 +65,22 @@ const LanguagesPanel: React.FC = () => {
                 googleLanguageProvider.transliterate(bgInputs, requestedSource, controller.signal),
               ])
             : Promise.resolve(null),
-          Promise.all(
-            requestedTargets.flatMap((language) => [
-              googleLanguageProvider.translate(mainInputs, language, requestedSource, controller.signal),
-              googleLanguageProvider.translate(bgInputs, language, requestedSource, controller.signal),
-            ]),
+          runTranslations(
+            googleLanguageProvider,
+            requestedTargets,
+            (targetLanguage) => ({
+              main: mainInputs,
+              background: bgInputs,
+              targetLanguage,
+              sourceLanguage: requestedSource,
+              context: {
+                title: startingState.metadata.title,
+                artists: startingState.metadata.artists,
+                album: startingState.metadata.album,
+              },
+              signal: controller.signal,
+            }),
+            false,
           ),
         ]);
         const currentState = useProjectStore.getState();
@@ -82,9 +94,10 @@ const LanguagesPanel: React.FC = () => {
           return;
         }
         if (
-          [...(romanizationResults ?? []), ...translationResults].some((batch) =>
-            batch.lines.some((result) => result.failed),
-          )
+          [
+            ...(romanizationResults ?? []).map((batch) => batch.lines),
+            ...translationResults.flatMap((batch) => [batch.main, batch.background]),
+          ].some((results) => results.some((result) => result.failed))
         ) {
           toast.error("Couldn't generate some lines. Try Regenerate.");
         }
@@ -100,8 +113,8 @@ const LanguagesPanel: React.FC = () => {
           : undefined;
         const translationPairs = requestedTargets.map((language, index) => ({
           language,
-          main: new Map(translationResults[index * 2].lines.map((result) => [result.id, result])),
-          background: new Map(translationResults[index * 2 + 1].lines.map((result) => [result.id, result])),
+          main: new Map(translationResults[index].main.map((result) => [result.id, result])),
+          background: new Map(translationResults[index].background.map((result) => [result.id, result])),
         }));
         const updates = mergeGeneratedLanguageUpdates(
           startingLines,

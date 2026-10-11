@@ -19,25 +19,41 @@ interface TransliterationLineResult {
   failed?: boolean;
 }
 
-interface TranslationBatchResult {
-  detectedLanguage: string;
-  lines: TranslationLineResult[];
-}
-
 interface TransliterationBatchResult {
   detectedLanguage: string;
   language: string;
   lines: TransliterationLineResult[];
 }
 
-interface LanguageProvider {
+interface TranslationContext {
+  title: string;
+  artists: string[];
+  album: string;
+}
+
+/** One target language for the whole song, so context-aware providers see main and background lines together. */
+interface TranslationRequest {
+  main: LanguageLineInput[];
+  background: LanguageLineInput[];
+  targetLanguage: string;
+  sourceLanguage?: string;
+  context: TranslationContext;
+  signal?: AbortSignal;
+}
+
+interface TranslationResponse {
+  detectedLanguage: string;
+  main: TranslationLineResult[];
+  background: TranslationLineResult[];
+}
+
+interface TranslationProvider {
   id: string;
-  translate(
-    lines: LanguageLineInput[],
-    targetLanguage: string,
-    sourceLanguage?: string,
-    signal?: AbortSignal,
-  ): Promise<TranslationBatchResult>;
+  translate(request: TranslationRequest): Promise<TranslationResponse>;
+}
+
+interface TransliterationProvider {
+  id: string;
   transliterate(
     lines: LanguageLineInput[],
     sourceLanguage?: string,
@@ -47,9 +63,12 @@ interface LanguageProvider {
 
 export type {
   LanguageLineInput,
-  LanguageProvider,
-  TranslationBatchResult,
+  TranslationContext,
   TranslationLineResult,
+  TranslationProvider,
+  TranslationRequest,
+  TranslationResponse,
   TransliterationBatchResult,
   TransliterationLineResult,
+  TransliterationProvider,
 };

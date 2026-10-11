@@ -1,6 +1,11 @@
 import { googleLanguageProvider, normalizeGoogleTransliteration } from "@/services/google-language-provider";
+import type { LanguageLineInput } from "@/services/language-provider";
 import { generatedLanguageUpdates } from "@/views/languages/generated-language-updates";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+function translateRequest(main: LanguageLineInput[], targetLanguage: string, sourceLanguage?: string) {
+  return { main, background: [], targetLanguage, sourceLanguage, context: { title: "", artists: [], album: "" } };
+}
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -80,8 +85,10 @@ describe("Google translation source language", () => {
       expect(url.searchParams.get("tl")).toBe("zh-TW");
       return new Response(JSON.stringify([[["傳統", "传统"]], null, "zh-CN"]));
     });
-    const result = await googleLanguageProvider.translate([{ id: "alias", text: "传统" }], "zh-Hant", "zh-Hans");
-    expect(result.lines[0].text).toBe("傳統");
+    const result = await googleLanguageProvider.translate(
+      translateRequest([{ id: "alias", text: "传统" }], "zh-Hant", "zh-Hans"),
+    );
+    expect(result.main[0].text).toBe("傳統");
   });
 
   it("uses the selected source language for mixed-script lines", async () => {
@@ -95,9 +102,26 @@ describe("Google translation source language", () => {
       );
     });
 
-    const result = await googleLanguageProvider.translate([{ id: "mixed", text: sourceText }], "en", "ko");
+    const result = await googleLanguageProvider.translate(
+      translateRequest([{ id: "mixed", text: sourceText }], "en", "ko"),
+    );
 
-    expect(result.lines[0].text).toBe("My to-do list is full, I say, “What are those?”");
+    expect(result.main[0].text).toBe("My to-do list is full, I say, “What are those?”");
+  });
+
+  it("translates background lines in the same call and reports them separately", async () => {
+    vi.stubGlobal("fetch", async (input: string | URL | Request) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+      const text = url.searchParams.get("q");
+      return new Response(JSON.stringify([[[`T:${text}`, text]], null, "ja"]));
+    });
+    const result = await googleLanguageProvider.translate({
+      ...translateRequest([{ id: "a", text: "line one" }], "en", "ja"),
+      background: [{ id: "a", text: "bg one" }],
+    });
+    expect(result.main).toEqual([{ id: "a", text: "T:line one" }]);
+    expect(result.background).toEqual([{ id: "a", text: "T:bg one" }]);
+    expect(result.detectedLanguage).toBe("ja");
   });
 });
 
@@ -111,10 +135,11 @@ describe("Google partial request failures", () => {
       vi.stubGlobal("fetch", fetchMock);
       const run = () =>
         operation === "translate"
-          ? googleLanguageProvider.translate([{ id: "line", text: source }], "en", "en")
+          ? googleLanguageProvider.translate(translateRequest([{ id: "line", text: source }], "en", "en"))
           : googleLanguageProvider.transliterate([{ id: "line", text: source }], "en");
-      const result = await run();
-      expect(result.lines[0]).toMatchObject({ id: "line", text: null, failed: true });
+      const outcome = await run();
+      const first = "main" in outcome ? outcome.main[0] : outcome.lines[0];
+      expect(first).toMatchObject({ id: "line", text: null, failed: true });
       const line = {
         id: "line",
         agentId: "v1",
@@ -134,10 +159,10 @@ describe("Google partial request failures", () => {
         force: true,
         transliteration: {
           language: "en-Latn",
-          main: new Map([["line", { ...result.lines[0], segments: [] }]]),
+          main: new Map([["line", { ...first, segments: [] }]]),
           background: new Map(),
         },
-        translations: [{ language: "en", main: new Map([["line", result.lines[0]]]), background: new Map() }],
+        translations: [{ language: "en", main: new Map([["line", first]]), background: new Map() }],
       });
       expect(updates).not.toHaveProperty("transliteration");
       expect(updates.translations?.en).toBe(line.translations.en);
@@ -145,9 +170,10 @@ describe("Google partial request failures", () => {
       fetchMock.mockImplementation(
         async () => new Response(JSON.stringify([[["retry value", source, "retry value"]], null, "en"])),
       );
-      const retry = await run();
-      expect(retry.lines[0].failed).toBeUndefined();
-      expect(retry.lines[0].text).toBeTruthy();
+      const retryOutcome = await run();
+      const retry = "main" in retryOutcome ? retryOutcome.main[0] : retryOutcome.lines[0];
+      expect(retry.failed).toBeUndefined();
+      expect(retry.text).toBeTruthy();
       await run();
       expect(fetchMock).toHaveBeenCalledTimes(2);
     },
@@ -172,20 +198,22 @@ describe("Google partial request failures", () => {
       ];
       const run = () =>
         operation === "translate"
-          ? googleLanguageProvider.translate(inputs, "en", "en")
+          ? googleLanguageProvider.translate(translateRequest(inputs, "en", "en"))
           : googleLanguageProvider.transliterate(inputs, "en");
 
-      const result = await run();
-      expect(result.lines[0]).toMatchObject({ id: "failed", text: null, failed: true });
-      expect(result.lines[1]).toMatchObject({ id: "empty", text: null });
-      expect(result.lines[1].failed).toBeUndefined();
+      const outcome = await run();
+      const resultLines = "main" in outcome ? outcome.main : outcome.lines;
+      expect(resultLines[0]).toMatchObject({ id: "failed", text: null, failed: true });
+      expect(resultLines[1]).toMatchObject({ id: "empty", text: null });
+      expect(resultLines[1].failed).toBeUndefined();
 
       fetchMock.mockImplementation(
         async () => new Response(JSON.stringify([[["retry success", failingText, "retry success"]], null, "en"])),
       );
-      const retry = await run();
-      expect(retry.lines[0].text).toBeTruthy();
-      expect(retry.lines[0].failed).toBeUndefined();
+      const retryOutcome = await run();
+      const retryLines = "main" in retryOutcome ? retryOutcome.main : retryOutcome.lines;
+      expect(retryLines[0].text).toBeTruthy();
+      expect(retryLines[0].failed).toBeUndefined();
       expect(fetchMock).toHaveBeenCalledTimes(3);
     },
   );
