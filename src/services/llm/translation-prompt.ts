@@ -69,10 +69,18 @@ function userMessage(input: TranslationPromptInput): string {
   return sections.filter(Boolean).join("\n\n");
 }
 
-/** Returns the first balanced top-level JSON object in raw, skipping fences and prose. */
-function extractJsonObject(raw: string): unknown {
-  const start = raw.indexOf("{");
-  if (start === -1) return undefined;
+const CLOSE_THINK = "</think>";
+
+/** Reasoning models inline their thinking, often with draft JSON; only the text after it is the answer. */
+function withoutReasoning(raw: string): string {
+  const text = raw.replace(/<think>[\s\S]*?<\/think>/gi, "");
+  const close = text.toLowerCase().lastIndexOf(CLOSE_THINK);
+  if (close !== -1) return text.slice(close + CLOSE_THINK.length);
+  return text.trimStart().toLowerCase().startsWith("<think>") ? "" : text;
+}
+
+/** End index (exclusive) of the balanced `{...}` span starting at start, or -1 when it never closes. */
+function balancedEnd(raw: string, start: number): number {
   let depth = 0;
   let inString = false;
   let escaped = false;
@@ -86,15 +94,34 @@ function extractJsonObject(raw: string): unknown {
     }
     if (character === '"') inString = true;
     else if (character === "{") depth++;
-    else if (character === "}" && --depth === 0) {
-      try {
-        return JSON.parse(raw.slice(start, index + 1));
-      } catch {
-        return undefined;
-      }
-    }
+    else if (character === "}" && --depth === 0) return index + 1;
   }
-  return undefined;
+  return -1;
+}
+
+/**
+ * Returns the best JSON object in raw, skipping fences, prose and reasoning blocks: the first
+ * one that has a `lines` record, otherwise the first one that parses.
+ */
+function extractJsonObject(raw: string): unknown {
+  const text = withoutReasoning(raw);
+  let first: unknown;
+  let start = text.indexOf("{");
+  while (start !== -1) {
+    const end = balancedEnd(text, start);
+    let parsed: unknown;
+    try {
+      if (end === -1) throw new SyntaxError("Unbalanced");
+      parsed = JSON.parse(text.slice(start, end));
+    } catch {
+      start = text.indexOf("{", start + 1);
+      continue;
+    }
+    if (isRecord(parsed) && isRecord(parsed.lines)) return parsed;
+    first ??= parsed;
+    start = text.indexOf("{", end);
+  }
+  return first;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

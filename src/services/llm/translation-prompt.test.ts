@@ -92,6 +92,45 @@ describe("parseTranslationResponse", () => {
     expect(Object.fromEntries(parsed.translations)).toEqual({ "1": "A {x}", "2": "C" });
   });
 
+  it("skips a brace in prose before the real JSON", () => {
+    const parsed = parseTranslationResponse('Here is the {result}: {"lines":{"1":"A"}}', KEYS);
+    expect(Object.fromEntries(parsed.translations)).toEqual({ "1": "A" });
+  });
+
+  it("skips an unclosed brace in prose before the real JSON", () => {
+    const parsed = parseTranslationResponse('Use { carefully: {"lines":{"1":"A"}}', KEYS);
+    expect(parsed.translations.get("1")).toBe("A");
+  });
+
+  it("ignores a JSON-looking draft inside a think block", () => {
+    const parsed = parseTranslationResponse(
+      '<think>Draft: {"lines":{"1":"draft"}} but let me recheck.</think>\n{"lines":{"1":"A"}}',
+      KEYS,
+    );
+    expect(Object.fromEntries(parsed.translations)).toEqual({ "1": "A" });
+  });
+
+  it("drops reasoning that only has a closing tag", () => {
+    const parsed = parseTranslationResponse('{"lines":{"1":"draft"}} more thinking</THINK>{"lines":{"1":"A"}}', KEYS);
+    expect(parsed.translations.get("1")).toBe("A");
+  });
+
+  it("throws bad-response when the reply is only an unfinished think block", () => {
+    expect(() => parseTranslationResponse('<think>{"lines":{"1":"draft"}}', KEYS)).toThrow(
+      expect.objectContaining({ kind: "bad-response" }),
+    );
+  });
+
+  it("prefers the object with a lines record over an earlier plain object", () => {
+    const parsed = parseTranslationResponse('Note {"note":"x"} then {"lines":{"1":"A"}}', KEYS);
+    expect(parsed.translations.get("1")).toBe("A");
+  });
+
+  it("falls back to the first object that parses when none has lines", () => {
+    const parsed = parseTranslationResponse('Oops {nope} {"1":"A"} {"2":"C"}', KEYS);
+    expect(Object.fromEntries(parsed.translations)).toEqual({ "1": "A" });
+  });
+
   it("accepts a flat key map without the lines wrapper", () => {
     const parsed = parseTranslationResponse('{"1":"A","2":"C"}', KEYS);
     expect(Object.fromEntries(parsed.translations)).toEqual({ "1": "A", "2": "C" });
