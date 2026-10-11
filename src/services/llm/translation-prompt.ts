@@ -124,6 +124,18 @@ function extractJsonObject(raw: string): unknown {
   return first;
 }
 
+/** The model's guess as a canonical BCP 47 tag with a 2-3 letter language, or "" when it isn't one. */
+function canonicalLanguageTag(value: unknown): string {
+  if (typeof value !== "string") return "";
+  try {
+    const [tag] = Intl.getCanonicalLocales(value.trim());
+    const language = tag.split("-")[0];
+    return language.length === 2 || language.length === 3 ? tag : "";
+  } catch {
+    return "";
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -150,7 +162,7 @@ function parseTranslationResponse(
     if (typeof value === "string" && value.trim()) translations.set(key, value.trim());
   }
   return {
-    detectedLanguage: typeof parsed.detectedLanguage === "string" ? parsed.detectedLanguage : "",
+    detectedLanguage: canonicalLanguageTag(parsed.detectedLanguage),
     translations,
   };
 }

@@ -131,6 +131,23 @@ describe("parseTranslationResponse", () => {
     expect(Object.fromEntries(parsed.translations)).toEqual({ "1": "A" });
   });
 
+  it.each([
+    [" ja ", "ja"],
+    ["JA", "ja"],
+    ["zh-hans", "zh-Hans"],
+    ["Japanese", ""],
+    ["auto", ""],
+    ["en_US", ""],
+    ["", ""],
+  ])("normalises detectedLanguage %j to %j", (detected, expected) => {
+    const raw = JSON.stringify({ detectedLanguage: detected, lines: { "1": "A" } });
+    expect(parseTranslationResponse(raw, KEYS).detectedLanguage).toBe(expected);
+  });
+
+  it("returns an empty detectedLanguage when it is not a string", () => {
+    expect(parseTranslationResponse('{"detectedLanguage":5,"lines":{"1":"A"}}', KEYS).detectedLanguage).toBe("");
+  });
+
   it("accepts a flat key map without the lines wrapper", () => {
     const parsed = parseTranslationResponse('{"1":"A","2":"C"}', KEYS);
     expect(Object.fromEntries(parsed.translations)).toEqual({ "1": "A", "2": "C" });
