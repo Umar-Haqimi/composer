@@ -121,6 +121,41 @@ describe("createLlmTranslationProvider", () => {
     expect(result.background).toEqual([{ id: "c", text: "B2" }]);
   });
 
+  it("numbers a background-only line in project order when lineOrder is given", async () => {
+    const prompts = stubReplies({ "1": "L1", "2b": "B2", "3": "L3" });
+    const result = await createLlmTranslationProvider(PROFILE).translate(
+      request({
+        main: [
+          { id: "a", text: "line one" },
+          { id: "c", text: "line three" },
+        ],
+        background: [{ id: "b", text: "bg two" }],
+        lineOrder: ["a", "b", "c"],
+      }),
+    );
+    expect(prompts[0]).toContain(JSON.stringify({ "1": "line one", "3": "line three", "2b": "bg two" }, null, 2));
+    expect(result.main).toEqual([
+      { id: "a", text: "L1" },
+      { id: "c", text: "L3" },
+    ]);
+    expect(result.background).toEqual([{ id: "b", text: "B2" }]);
+  });
+
+  it("appends ids missing from lineOrder after the ordered ones", async () => {
+    const prompts = stubReplies({ "1": "L1", "2": "L2" });
+    await createLlmTranslationProvider(PROFILE).translate(
+      request({
+        main: [
+          { id: "x", text: "line one" },
+          { id: "a", text: "line two" },
+        ],
+        background: [],
+        lineOrder: ["a"],
+      }),
+    );
+    expect(prompts[0]).toContain(JSON.stringify({ "1": "line two", "2": "line one" }, null, 2));
+  });
+
   it("skips a blank main line without sending it or retrying, and still translates its background", async () => {
     const prompts = stubReplies({ "1b": "B2" });
     const result = await createLlmTranslationProvider(PROFILE).translate(

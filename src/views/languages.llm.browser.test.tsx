@@ -107,4 +107,25 @@ describe("Languages translation provider", () => {
     await expect.poll(() => document.body.textContent).toMatch(/Couldn't reach Local model/);
     expect(document.body.textContent).not.toMatch(/Couldn't generate some lines/);
   });
+
+  it("numbers a background-only line in project order in the LLM request", async () => {
+    mockGoogle();
+    useProjectStore.getState().setLines([
+      { id: "a", text: "line one", agentId: "v1" },
+      { id: "b", text: "", backgroundText: "(bg one)", agentId: "v1" },
+      { id: "c", text: "line two", agentId: "v1" },
+    ]);
+    const id = useSettingsStore.getState().addLlmProfile("ollama", { label: "Local model", model: "m" });
+    useSettingsStore.getState().selectTranslationProvider(id);
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
+      Response.json({
+        choices: [{ message: { content: JSON.stringify({ lines: { "1": "L1", "2b": "B2", "3": "L3" } }) } }],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await render(<LanguagesPanel />);
+    await expect.poll(() => fetchMock.mock.calls.length).toBeGreaterThan(0);
+    const prompt = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).messages[1].content;
+    expect(prompt).toContain(JSON.stringify({ "1": "line one", "3": "line two", "2b": "(bg one)" }, null, 2));
+  });
 });

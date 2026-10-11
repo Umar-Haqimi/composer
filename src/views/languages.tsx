@@ -89,6 +89,7 @@ const LanguagesPanel: React.FC = () => {
               targetLanguage,
               sourceLanguage: requestedSource,
               context: translationContext(startingState.metadata),
+              lineOrder: startingState.lines.map((line) => line.id),
               signal: controller.signal,
             }),
             profile !== undefined,

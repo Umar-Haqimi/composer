@@ -38,6 +38,8 @@ interface TranslationRequest {
   targetLanguage: string;
   sourceLanguage?: string;
   context: TranslationContext;
+  /** Line ids in project order, so providers that number lines can keep background-only lines in place. Google ignores it. */
+  lineOrder?: string[];
   signal?: AbortSignal;
 }
 

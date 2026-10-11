@@ -18,20 +18,20 @@ interface KeyedItem extends PromptItem {
 
 // -- Keys & chunks ------------------------------------------------------------
 
-/** One group per line id, numbered in first-appearance order; background keys get a "b" suffix. */
-function keyedGroups(main: LanguageLineInput[], background: LanguageLineInput[]): KeyedItem[][] {
-  const groups = new Map<string, KeyedItem[]>();
-  const groupFor = (id: string) => {
-    let group = groups.get(id);
-    if (!group) {
-      group = [];
-      groups.set(id, group);
-    }
-    return group;
-  };
-  for (const line of main) groupFor(line.id);
-  for (const line of background) groupFor(line.id);
-  const numbers = new Map([...groups.keys()].map((id, index) => [id, index + 1]));
+/**
+ * One group per line id, numbered by project position (`lineOrder`), then by first appearance for
+ * ids it doesn't list; background keys get a "b" suffix.
+ */
+function keyedGroups(
+  main: LanguageLineInput[],
+  background: LanguageLineInput[],
+  lineOrder: string[] = [],
+): KeyedItem[][] {
+  const present = new Set([...main, ...background].map((line) => line.id));
+  const ordered = [...new Set([...lineOrder.filter((id) => present.has(id)), ...present])];
+  const groups = new Map<string, KeyedItem[]>(ordered.map((id) => [id, []]));
+  const groupFor = (id: string) => groups.get(id) as KeyedItem[];
+  const numbers = new Map(ordered.map((id, index) => [id, index + 1]));
   for (const line of main) {
     groupFor(line.id).push({ id: line.id, slot: "main", key: `${numbers.get(line.id)}`, text: line.text });
   }
@@ -90,7 +90,7 @@ function createLlmTranslationProvider(profile: LlmProfile): TranslationProvider 
   return {
     id: `llm:${profile.id}`,
     async translate(request): Promise<TranslationResponse> {
-      const everyGroup = keyedGroups(request.main, request.background);
+      const everyGroup = keyedGroups(request.main, request.background, request.lineOrder);
       const groups = everyGroup
         .map((group) => group.filter((item) => !isBlank(item.text)))
         .filter((group) => group.length > 0);
