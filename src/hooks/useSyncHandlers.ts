@@ -78,7 +78,8 @@ function useSyncHandlers({
 
   const runGesture = useCallback(
     (gesture: SyncGesture): boolean => {
-      const { defaultWordDuration, autoRewindForBracketedLines, redoPreroll } = useSettingsStore.getState();
+      const { defaultWordDuration, autoRewindForBracketedLines, redoPreroll, snapEarlyTaps } =
+        useSettingsStore.getState();
       // Overlap and auto-rewind need a closing tap per line, which only word granularity has.
       const bracketRewind = autoRewindForBracketedLines && granularity === "word";
       const commit = commitGesture(lines, gesture, {
@@ -87,6 +88,7 @@ function useSyncHandlers({
         time: readTapTime(),
         defaultWordDuration,
         overlapsPrevious: bracketRewind && overlapsPreviousLine(lines, cursor.lineIndex),
+        snapEarlyTaps,
       });
       if (!commit) return false;
       updateLinesWithHistory(commit.lineUpdates, { deriveText: false, propagateToSiblings: false });

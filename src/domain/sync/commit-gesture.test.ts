@@ -13,6 +13,7 @@ function run(
   time: number,
   jumped = false,
   overlapsPrevious = false,
+  snapEarlyTaps = true,
 ) {
   return commitGesture(lines, gesture, {
     cursor: { lineIndex: cursor[0], wordIndex: cursor[1] },
@@ -20,6 +21,7 @@ function run(
     time,
     defaultWordDuration: DUR,
     overlapsPrevious,
+    snapEarlyTaps,
   });
 }
 
@@ -609,5 +611,70 @@ describe("overlapsPrevious", () => {
     const next = apply(lines, commit);
     expect(next[1].begin).toBe(1);
     expect(next[0]).toMatchObject({ begin: 2, end: 4 });
+  });
+});
+
+describe("snapEarlyTaps off", () => {
+  const noSnap = (lines: LyricLine[], gesture: SyncGesture, cursor: [number, number], time: number, jumped = false) =>
+    run(lines, gesture, cursor, time, jumped, false, false);
+  const main = () =>
+    createLine({ id: "l0", text: "Hello world", words: [word("Hello ", 2, 2.5), word("world", 3, 3.3)] });
+  const next = () => createLine({ id: "l1", text: "ooh ah" });
+
+  it("lets a tap on the next line land before the previous line's last word", () => {
+    const lines = [main(), next()];
+    const commit = noSnap(lines, "tap-word", [1, 0], 2.8);
+    expect(commit?.clampedTo).toBeNull();
+    expect(apply(lines, commit)[1].words?.[0]).toMatchObject({ begin: 2.8, end: 2.8 + DUR });
+  });
+
+  it("leaves the overlapped previous line untouched", () => {
+    const lines = [main(), next()];
+    const commit = noSnap(lines, "tap-word", [1, 0], 2.8);
+    expect(commit?.lineUpdates.map((u) => u.id)).toEqual(["l1"]);
+  });
+
+  it("still closes the previous line's last word on a tap after it begins", () => {
+    const lines = [main(), next()];
+    const commit = noSnap(lines, "tap-word", [1, 0], 3.1);
+    expect(commit?.clampedTo).toBeNull();
+    expect(apply(lines, commit)[0].words?.[1]).toEqual(word("world", 3, 3.1));
+  });
+
+  it("lets a re-recorded line start before the previous line's last word instead of snapping to its end", () => {
+    const lines = [main(), createLine({ id: "l1", text: "ooh ah", words: [word("ooh ", 5, 6), word("ah", 6, 7)] })];
+    const commit = noSnap(lines, "tap-word", [1, 0], 3, true);
+    expect(commit?.clampedTo).toBeNull();
+    const after = apply(lines, commit);
+    expect(after[1].words?.[0]).toMatchObject({ begin: 3 });
+    expect(after[0].words).toEqual(lines[0].words);
+  });
+
+  it("applies to hold-start", () => {
+    const lines = [main(), next()];
+    const commit = noSnap(lines, "hold-start", [1, 0], 2.8);
+    expect(commit?.clampedTo).toBeNull();
+    expect(apply(lines, commit)[1].words?.[0]).toMatchObject({ begin: 2.8, end: 2.8 });
+  });
+
+  it("applies to line granularity", () => {
+    const lines = [createLine({ id: "l0", text: "first", begin: 2, end: 4 }), next()];
+    const commit = noSnap(lines, "tap-line", [1, 0], 1);
+    expect(commit?.clampedTo).toBeNull();
+    const after = apply(lines, commit);
+    expect(after[1].begin).toBe(1);
+    expect(after[0]).toMatchObject({ begin: 2, end: 4 });
+  });
+
+  it("still snaps an early tap within the same line to keep words in order", () => {
+    const lines = [createLine({ id: "l0", text: "a b c", words: [word("a ", 5, 6), word("b ", 6, 6.3)] })];
+    const commit = noSnap(lines, "tap-word", [0, 2], 1);
+    expect(commit?.clampedTo).toBe(6);
+    expectMonotonic(apply(lines, commit));
+  });
+
+  it("still snaps a same-line re-record to the previous word's end", () => {
+    const lines = [createLine({ id: "l0", text: "a b", words: [word("a ", 1, 2), word("b", 2, 3)] })];
+    expect(noSnap(lines, "tap-word", [0, 1], 1, true)?.clampedTo).toBe(2);
   });
 });

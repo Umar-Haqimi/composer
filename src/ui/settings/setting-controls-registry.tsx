@@ -89,6 +89,7 @@ const SETTING_CONTROLS: Record<SettingId, SettingControl> = {
   undoRewindDuration: { kind: "slider", min: 0.5, max: 10, step: 0.5, format: (v) => `${v.toFixed(1)}s` },
   undoContinuePlayback: TOGGLE,
   autoRewindForBracketedLines: TOGGLE,
+  snapEarlyTaps: TOGGLE,
   defaultGranularity: {
     kind: "select",
     options: [

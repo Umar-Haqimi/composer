@@ -19,6 +19,8 @@ interface GestureContext {
   defaultWordDuration: number;
   // The cursor line is sung over the line before it, so that line neither floors nor gets closed by this tap.
   overlapsPrevious?: boolean;
+  // Off lets an early tap overlap the line before it instead of snapping to that line's last word.
+  snapEarlyTaps: boolean;
 }
 
 interface GestureCommit {
@@ -47,13 +49,17 @@ function closableSlot(lines: readonly LyricLine[], slot: SyncSlot): SyncSlot {
 }
 
 // A re-record may start inside the previous slot; one that lands before that slot begins is early and snaps to its end.
+// With snapping off, an early tap on a new line overlaps the previous line and leaves it alone.
 function anchorBefore(lines: readonly LyricLine[], ctx: GestureContext, granularity: "line" | "word"): Anchor {
   const previous = previousSlot(lines, ctx.cursor, granularity);
   if (!previous) return { slot: null, floor: 0 };
-  if (ctx.overlapsPrevious && previous.lineIndex !== ctx.cursor.lineIndex) return { slot: null, floor: 0 };
+  const crossLine = previous.lineIndex !== ctx.cursor.lineIndex;
+  if (ctx.overlapsPrevious && crossLine) return { slot: null, floor: 0 };
   const slot = closableSlot(lines, previous);
   const bounds = slotBounds(lines, slot);
   if (!bounds) return { slot: null, floor: 0 };
+  const early = ctx.jumped ? ctx.time <= bounds.begin : ctx.time < bounds.begin;
+  if (early && crossLine && !ctx.snapEarlyTaps) return { slot: null, floor: 0 };
   return { slot, floor: ctx.jumped && ctx.time <= bounds.begin ? bounds.end : bounds.begin };
 }
 

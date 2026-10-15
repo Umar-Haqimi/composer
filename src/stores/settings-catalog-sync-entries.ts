@@ -1,6 +1,6 @@
 import type { SettingEntry } from "@/stores/settings-catalog";
 
-// Catalog entries for the sync undo and bracket auto-rewind settings. Kept in
+// Catalog entries for the sync undo, bracket auto-rewind, and early-tap settings. Kept in
 // their own module so settings-catalog-entries.ts stays under the 300-line
 // budget. Spread into SETTINGS_CATALOG right after redoPreroll.
 
@@ -26,6 +26,14 @@ const SYNC_UNDO_REWIND_ENTRIES = {
       "When the next line is a bracketed background vocal, jump back to the start of the main line it overlaps so you can sync it.",
     keywords: ["background", "vocals", "brackets", "parentheses", "overlap", "rewind"],
     settingKey: "autoRewindForBracketedLines",
+  },
+  snapEarlyTaps: {
+    section: "sync",
+    label: "Snap early taps",
+    description:
+      "Move a tap that lands before the previous line's last word to that word instead. Leave off to let overlapping vocals start where you tap.",
+    keywords: ["early", "tap", "snap", "overlap", "clamp", "duet", "vocals"],
+    settingKey: "snapEarlyTaps",
   },
 } as const satisfies Record<string, SettingEntry>;
 

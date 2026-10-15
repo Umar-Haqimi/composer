@@ -77,6 +77,10 @@ const SyncSection: React.FC = () => (
         start of the line it overlaps so it can be synced. Turn this off in{" "}
         <SettingLink setting="autoRewindForBracketedLines" />.
       </p>
+      <p className={`${PROSE} mt-1.5`}>
+        A line can start before the previous line's last word, so overlapping vocals sync where you tap. To move early
+        taps onto that word instead, turn on <SettingLink setting="snapEarlyTaps" />.
+      </p>
     </HelpTopic>
 
     <HelpTopic title="Line-level vs word-level">

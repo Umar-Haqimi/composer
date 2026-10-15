@@ -23,6 +23,7 @@ describe("sync incremental tap preserves line.text", () => {
       jumped: false,
       time: 0,
       defaultWordDuration: 1,
+      snapEarlyTaps: true,
     });
     if (!commit) throw new Error("expected a commit");
     useProjectStore
@@ -41,6 +42,7 @@ describe("sync incremental tap preserves line.text", () => {
         jumped: false,
         time: i * 0.5,
         defaultWordDuration: 0.4,
+        snapEarlyTaps: true,
       });
       if (!commit) throw new Error("expected a commit");
       useProjectStore
@@ -60,6 +62,7 @@ describe("sync incremental tap preserves line.text", () => {
       jumped: false,
       time: 0,
       defaultWordDuration: 1,
+      snapEarlyTaps: true,
     });
     if (!commit) throw new Error("expected a commit");
     useProjectStore

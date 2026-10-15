@@ -64,6 +64,7 @@ interface SettingsState extends LlmProfilesState {
   undoRewindDuration: number;
   undoContinuePlayback: boolean;
   autoRewindForBracketedLines: boolean;
+  snapEarlyTaps: boolean;
   defaultGranularity: GranularityDefault;
 
   autoSaveDelay: number;
@@ -139,6 +140,7 @@ const DEFAULTS: SettingsState = {
   undoRewindDuration: 3,
   undoContinuePlayback: true,
   autoRewindForBracketedLines: true,
+  snapEarlyTaps: false,
   defaultGranularity: "word",
 
   autoSaveDelay: 2000,

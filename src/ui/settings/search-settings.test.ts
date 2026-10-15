@@ -72,7 +72,8 @@ describe("countMatchesBySection", () => {
   it("counts settings per section and shortcuts under shortcuts", () => {
     const result = search("snap");
     const counts = countMatchesBySection(result);
-    expect(counts.timeline).toBe(result.settings.length);
+    expect(counts.sync).toBe(1);
+    expect(counts.timeline).toBe(result.settings.length - 1);
     expect(counts.shortcuts).toBe(result.shortcuts.length);
     expect(counts.general).toBeUndefined();
   });

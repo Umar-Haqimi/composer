@@ -1212,6 +1212,7 @@ describe("useSyncHandlers bracketed-line auto-rewind", () => {
   });
 
   it("line granularity: a tap on the bracketed line before the previous line's start is still snapped forward", async () => {
+    useSettingsStore.setState({ snapEarlyTaps: true });
     useProjectStore.getState().setLines([createLine({ id: "l0", text: "Hello world", begin: 4, end: 6 }), bgLine()]);
     const { result, act } = await mountSyncHandlers({
       granularity: "line",

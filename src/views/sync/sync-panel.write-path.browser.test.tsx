@@ -5,6 +5,7 @@ import type { LyricLine } from "@/domain/line/model";
 import { isLineSynced } from "@/domain/line/predicates";
 import { useAudioStore } from "@/stores/audio";
 import { useProjectStore } from "@/stores/project";
+import { useSettingsStore } from "@/stores/settings";
 import { createAudioFile } from "@/test/audio-fixtures";
 import { createLine, createWord } from "@/test/factories";
 import { render } from "@/test/render";
@@ -166,6 +167,8 @@ describe("D5 tap behind the previous committed time", () => {
   });
 
   it("word mode, across lines: closing the previous line never writes end < begin", async () => {
+    // Snapping is what keeps a backwards tap behind the previous line; off, it overlaps instead.
+    useSettingsStore.setState({ snapEarlyTaps: true });
     load([createLine({ id: "l0", text: "a b" }), createLine({ id: "l1", text: "c d" })]);
     await render(<SyncPanel />);
     await tapAt(5);
@@ -175,6 +178,8 @@ describe("D5 tap behind the previous committed time", () => {
   });
 
   it("line mode: backwards tap never writes previous line end < begin", async () => {
+    // Snapping is what keeps a backwards tap behind the previous line; off, it overlaps instead.
+    useSettingsStore.setState({ snapEarlyTaps: true });
     load([createLine({ id: "l0", text: "first" }), createLine({ id: "l1", text: "second" })], { granularity: "line" });
     await render(<SyncPanel />);
     await tapAt(5);
@@ -185,6 +190,8 @@ describe("D5 tap behind the previous committed time", () => {
 
 describe("song end keeps sync armed", () => {
   it("after playback stops mid-sync, the next Space restarts playback with the cursor still mid-song", async () => {
+    // Snapping is what keeps a backwards tap behind the previous line; off, it overlaps instead.
+    useSettingsStore.setState({ snapEarlyTaps: true });
     load([createLine({ id: "l0", text: "a b" }), createLine({ id: "l1", text: "c d" })]);
     await render(<SyncPanel />);
     await tapAt(50);
@@ -404,6 +411,41 @@ describe("early tap flag (P1)", () => {
     await tapAt(5);
     await tapAt(6);
     await tapAt(1);
+    await expect.element(screen.getByText("Early tap snapped to 0:06.000")).toBeVisible();
+  });
+
+  it("by default lets the next line overlap the previous line's last word without a flag", async () => {
+    load([createLine({ id: "l0", text: "a b" }), createLine({ id: "l1", text: "c" })]);
+    const screen = await render(
+      <>
+        <Toaster />
+        <SyncPanel />
+      </>,
+    );
+    await tapAt(5);
+    await tapAt(6);
+    await tapAt(5.5);
+    expect(lines()[0].words?.map((w) => [w.begin, w.end])).toEqual([
+      [5, 6],
+      [6, 6.3],
+    ]);
+    expect(lines()[1].words?.[0].begin).toBe(5.5);
+    await expect.element(screen.getByText(/Early tap snapped/)).not.toBeInTheDocument();
+  });
+
+  it("snaps an early tap on the next line when snapping is on", async () => {
+    useSettingsStore.setState({ snapEarlyTaps: true });
+    load([createLine({ id: "l0", text: "a b" }), createLine({ id: "l1", text: "c" })]);
+    const screen = await render(
+      <>
+        <Toaster />
+        <SyncPanel />
+      </>,
+    );
+    await tapAt(5);
+    await tapAt(6);
+    await tapAt(5.5);
+    expect(lines()[1].words?.[0].begin).toBe(6);
     await expect.element(screen.getByText("Early tap snapped to 0:06.000")).toBeVisible();
   });
 });

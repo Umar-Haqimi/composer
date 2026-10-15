@@ -227,6 +227,7 @@ describe("instance resync · issue #96 reproduction", () => {
       jumped: false,
       time: begin,
       defaultWordDuration: 0.3,
+      snapEarlyTaps: true,
     });
     if (!commit) throw new Error("expected a commit");
     useProjectStore
@@ -326,6 +327,7 @@ describe("instance resync · issue #96 reproduction", () => {
       jumped: false,
       time: 0.5,
       defaultWordDuration: 0.3,
+      snapEarlyTaps: true,
     });
     if (!commit) throw new Error("expected a commit");
     useProjectStore.getState().updateLinesWithHistory(commit.lineUpdates, { deriveText: false });

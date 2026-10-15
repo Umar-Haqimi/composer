@@ -113,3 +113,16 @@ describe("sync undo and bracket rewind settings", () => {
     expect(state.autoRewindForBracketedLines).toBe(false);
   });
 });
+
+describe("snap early taps setting", () => {
+  it("defaults a saved blob from before the setting existed to off", async () => {
+    const { snapEarlyTaps: _s, ...withoutKey } = legacyBlob();
+    await rehydrateAt(6, withoutKey);
+    expect(useSettingsStore.getState().snapEarlyTaps).toBe(false);
+  });
+
+  it("keeps a saved choice across a rehydrate", async () => {
+    await rehydrateAt(6, legacyBlob({ snapEarlyTaps: true }));
+    expect(useSettingsStore.getState().snapEarlyTaps).toBe(true);
+  });
+});
