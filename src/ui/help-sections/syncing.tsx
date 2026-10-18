@@ -23,6 +23,15 @@ const SyncSection: React.FC = () => (
       </p>
     </HelpTopic>
 
+    <HelpTopic title="Counting in">
+      <p className={PROSE}>
+        When you start syncing from the very beginning of the song, Sync counts down before playback starts so you are
+        ready for the first word. Taps wait until the count ends. Change the length in{" "}
+        <SettingLink setting="syncCountIn" />. Set it to 0 to turn it off. Press Escape to skip the count and play at
+        once.
+      </p>
+    </HelpTopic>
+
     <HelpTopic title="Hold (F)">
       <p className={PROSE}>
         Press and hold <InlineKeyBadge keys={getEffectiveKeysArray("sync.holdSync")} /> for the duration of each word.

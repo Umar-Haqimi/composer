@@ -1,3 +1,8 @@
+import type { LibrarySort } from "@/domain/project/library-order";
+import type { LaunchScreen, LibraryView } from "@/domain/project/library-preferences";
+import type { KeepYouTubeAudio } from "@/domain/storage/audio-retention";
+import type { StorageLimit } from "@/domain/storage/storage-limit";
+import { SETTINGS_PERSIST_VERSION, migrateSettings } from "@/stores/settings-migration";
 import { DEFAULT_BRIDGE_URL } from "@/utils/composer-bridge-api";
 import { PREVIEW_SIDEBAR_WIDTH } from "@/utils/preview-sidebar-width";
 import { DEFAULT_MIN_WORD_DURATION } from "@/utils/word-spaces";
@@ -45,6 +50,8 @@ interface SettingsState {
   timelineSnap: boolean;
   timelineSnapThreshold: number;
   vocalOnsetSnap: boolean;
+  shareTimingInNewGroups: boolean;
+  loopOpenGroup: boolean;
   snapPlayheadToPoints: boolean;
   syllablesFollowRolling: boolean;
   timelineHorizontalScroll: boolean;
@@ -56,9 +63,17 @@ interface SettingsState {
   undoRewindDuration: number;
   undoContinuePlayback: boolean;
   autoRewindForBracketedLines: boolean;
+  syncCountIn: number;
   defaultGranularity: GranularityDefault;
 
   autoSaveDelay: number;
+  keepYouTubeAudio: KeepYouTubeAudio;
+  smartCleanup: boolean;
+  storageLimit: StorageLimit;
+
+  libraryView: LibraryView;
+  librarySort: LibrarySort;
+  launchScreen: LaunchScreen;
 
   showShortcutHints: boolean;
   showSyllableIndicators: boolean;
@@ -67,7 +82,6 @@ interface SettingsState {
   mergeStandaloneBackgroundLines: boolean;
   preserveBracketsOnExtraction: boolean;
 
-  confirmReplaceProjectFromHash: boolean;
   confirmReplaceLyrics: boolean;
   confirmSyncReset: boolean;
   confirmClearProject: boolean;
@@ -120,6 +134,8 @@ const DEFAULTS: SettingsState = {
   timelineSnap: true,
   timelineSnapThreshold: 12,
   vocalOnsetSnap: true,
+  shareTimingInNewGroups: true,
+  loopOpenGroup: false,
   snapPlayheadToPoints: true,
   syllablesFollowRolling: false,
   timelineHorizontalScroll: false,
@@ -131,9 +147,17 @@ const DEFAULTS: SettingsState = {
   undoRewindDuration: 3,
   undoContinuePlayback: true,
   autoRewindForBracketedLines: true,
+  syncCountIn: 3,
   defaultGranularity: "word",
 
   autoSaveDelay: 2000,
+  keepYouTubeAudio: "auto",
+  smartCleanup: true,
+  storageLimit: "2gb",
+
+  libraryView: "list",
+  librarySort: "edited",
+  launchScreen: "projects",
 
   showShortcutHints: true,
   showSyllableIndicators: true,
@@ -142,7 +166,6 @@ const DEFAULTS: SettingsState = {
   mergeStandaloneBackgroundLines: true,
   preserveBracketsOnExtraction: true,
 
-  confirmReplaceProjectFromHash: true,
   confirmReplaceLyrics: true,
   confirmSyncReset: true,
   confirmClearProject: true,
@@ -173,26 +196,6 @@ const BUILTIN_COBALT_INSTANCE: CobaltInstance = {
   url: "https://cobalt.boidu.dev",
 };
 
-const SETTINGS_PERSIST_VERSION = 6;
-
-function migrateSettings(persistedState: unknown, version: number): unknown {
-  if (!persistedState || typeof persistedState !== "object") return persistedState;
-  const state = persistedState as Partial<SettingsState>;
-  const next: Partial<SettingsState> = { ...state };
-  if (version < 2 || next.vocalModelVariant === "fp16") {
-    next.vocalModelVariant = "fp32";
-  }
-  if (next.defaultRollingEdit === undefined) next.defaultRollingEdit = false;
-  if (next.defaultPreviewSidebar === undefined) next.defaultPreviewSidebar = false;
-  if (next.vocalOnsetSnap === undefined) next.vocalOnsetSnap = true;
-  if (next.snapPlayheadToPoints === undefined) next.snapPlayheadToPoints = true;
-  if (next.redoPreroll === undefined) next.redoPreroll = 1.5;
-  // The key predates the default flip, so every old blob carries an explicit
-  // false that a plain undefined guard would never reach.
-  if (version < 6) next.preserveBracketsOnExtraction = true;
-  return next;
-}
-
 // -- Store --------------------------------------------------------------------
 
 const useSettingsStore = create<SettingsState & SettingsActions>()(
@@ -204,7 +207,6 @@ const useSettingsStore = create<SettingsState & SettingsActions>()(
       resetToDefaults: () =>
         set((state) => ({
           ...DEFAULTS,
-          confirmReplaceProjectFromHash: state.confirmReplaceProjectFromHash,
           confirmReplaceLyrics: state.confirmReplaceLyrics,
           confirmSyncReset: state.confirmSyncReset,
           confirmClearProject: state.confirmClearProject,
@@ -276,6 +278,5 @@ export {
   DEFAULT_COBALT_INSTANCE_ID,
   getActiveCobaltInstance,
   isUsingDefaultCobaltInstance,
-  migrateSettings as migrateSettingsForTest,
 };
-export type { SettingsState, CobaltInstanceStatus, LinkedDivergenceAction, VocalModelVariant };
+export type { SettingsState, CobaltInstanceStatus, VocalModelVariant };
