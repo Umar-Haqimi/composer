@@ -123,6 +123,7 @@ async function runChunkPipeline(opts: PipelineOptions): Promise<PipelineResult> 
       const result = await inFlight.run;
       const chunkWaitMs = performance.now() - waitStart;
       waitMs += chunkWaitMs;
+      if (opts.isCancelled()) return { status: "cancelled" };
       if (chunkIndex === profileChunk) stopKernelProfile(runtime.env);
       const finished = inFlight.prepared.chunk;
       inFlight = next ? { prepared: next, run: startRun(next) } : null;

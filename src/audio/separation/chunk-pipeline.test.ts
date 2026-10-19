@@ -63,10 +63,9 @@ describe("runChunkPipeline", () => {
       outputNames: [],
       run: () => (++runs === 1 ? Promise.resolve(validOutputs()) : second.promise),
     };
-    // Not cancelled at the first loop check, cancelled at the second, while
-    // run #2 is still executing.
+    // Cancelled at the third check (top of the second loop pass), while run #2 is still executing.
     let checks = 0;
-    const promise = runChunkPipeline(makeOptions(session, () => ++checks > 1));
+    const promise = runChunkPipeline(makeOptions(session, () => ++checks > 2));
     let settled = false;
     promise.then(
       () => {
@@ -106,6 +105,22 @@ describe("runChunkPipeline", () => {
 
     second.resolve(validOutputs());
     await expect(promise).rejects.toThrow("Missing output tensor");
+  });
+
+  it("regression: does not start the next run after a cancel arrives during a run", async () => {
+    let runs = 0;
+    const session: OrtSession = {
+      inputNames: [],
+      outputNames: [],
+      run: () => {
+        runs++;
+        return Promise.resolve(validOutputs());
+      },
+    };
+    let checks = 0;
+    const result = await runChunkPipeline(makeOptions(session, () => ++checks > 1));
+    expect(result).toEqual({ status: "cancelled" });
+    expect(runs).toBe(1);
   });
 
   it("returns every chunk when not cancelled", async () => {
