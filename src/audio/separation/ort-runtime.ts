@@ -36,7 +36,7 @@ interface Ort {
 
 const WEBGPU_POWER_PREFERENCE = "high-performance";
 
-let loaded: Ort | null = null;
+const loaded: Partial<Record<Backend, Ort>> = {};
 
 // The CDN WASM/JSEP loader files must match the bundled JS version exactly.
 function getOrtVersion(): string {
@@ -44,7 +44,8 @@ function getOrtVersion(): string {
 }
 
 async function loadOrt(backend: Backend, profile: boolean): Promise<Ort> {
-  if (loaded) return loaded;
+  const cached = loaded[backend];
+  if (cached) return cached;
   const mod = backend === "wasm" ? await import("onnxruntime-web") : await import("onnxruntime-web/webgpu");
   const candidate = (mod as unknown as { default?: Ort }).default ?? (mod as unknown as Ort);
   candidate.env.wasm.numThreads = 1;
@@ -55,7 +56,7 @@ async function loadOrt(backend: Backend, profile: boolean): Promise<Ort> {
   if (profile && candidate.env.webgpu) {
     candidate.env.webgpu.profiling = { mode: "off", ondata: recordKernel };
   }
-  loaded = candidate;
+  loaded[backend] = candidate;
   return candidate;
 }
 
