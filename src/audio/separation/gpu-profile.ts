@@ -1,9 +1,6 @@
 import { log } from "@/audio/separation/worker-log";
 
-// Opt-in (localStorage["composer.profileSeparation"] = "1") one-chunk GPU kernel
-// profile. ORT's standard timestamp-query mode ends a compute pass per kernel,
-// so it is switched on for a single chunk only and only its kernel durations
-// are meaningful, not that chunk's wall time.
+// Timestamp queries slow the profiled run, so only its kernel durations are meaningful, not its wall time.
 
 interface ProfilingEnv {
   webgpu?: { profiling?: { mode?: "off" | "default" } };
@@ -30,8 +27,7 @@ function startKernelProfile(env: ProfilingEnv) {
   setProfilingMode(env, "default");
 }
 
-// ORT reads the profiling mode when a run starts, so only switch it off once the
-// profiled run has finished.
+// ORT reads the profiling mode at run start, so switch it off only after the profiled run.
 function stopKernelProfile(env: ProfilingEnv) {
   setProfilingMode(env, "off");
 }

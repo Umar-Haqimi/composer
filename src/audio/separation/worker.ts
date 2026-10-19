@@ -45,8 +45,7 @@ async function handleInit(variant: VocalModelVariant, forceWasm?: boolean, profi
     return;
   }
 
-  // Pick the backend first: it is cheap, and it lets us refuse a variant the
-  // device cannot run before spending a download on it.
+  // Pick the backend before the download so an unsupported variant is refused early.
   const choice = await chooseBackend(forceWasm);
   if (choice.backend === "webgpu") {
     log(`using WebGPU (${choice.adapterLabel})`);

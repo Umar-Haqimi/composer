@@ -38,7 +38,6 @@ interface PipelineOptions {
 
 type PipelineResult = { status: "done"; chunks: Chunk[] } | { status: "cancelled" };
 
-// Builds both model inputs for a chunk (CPU-only; includes the STFT).
 function prepareChunk(runtime: Ort, chunk: Chunk): PreparedChunk {
   // "input" waveform tensor: [1, 2, 343980], laid out [L..., R...].
   const waveformFlat = new Float32Array(2 * SEGMENT_SAMPLES);
@@ -55,9 +54,7 @@ function prepareChunk(runtime: Ort, chunk: Chunk): PreparedChunk {
   };
 }
 
-// Software-pipelined: the CPU work (STFT for the next chunk, iSTFT for the
-// previous one) runs while the GPU is busy with the current inference call,
-// instead of the GPU idling through each chunk's pre/post-processing.
+// Pipelined so the STFT/iSTFT CPU work overlaps the in-flight run; ORT allows only one run at a time.
 //   run(i) ‖ prepare(i+1)  →  await run(i)  →  start run(i+1) ‖ extract(i)
 // Only one session.run is ever in flight; ORT does not allow concurrent runs.
 // Throws on any inference or tensor failure; the caller reports it.
@@ -79,16 +76,12 @@ async function runChunkPipeline(opts: PipelineOptions): Promise<PipelineResult> 
     const submitStart = performance.now();
     const run = session.run(prepared.feeds);
     submitMs += performance.now() - submitStart;
-    // If we bail out before awaiting this run (cancel/error), don't leave an
-    // unhandled rejection behind. The caller's own await still sees the error.
+    // Avoid an unhandled rejection if we exit before awaiting; the caller's await still sees the error.
     run.catch(() => {});
     return run;
   };
 
-  // Timing. The worker is single-threaded, so each moment is either CPU work
-  // (prepare/extract) or awaiting inference. `waitMs` is the time spent blocked
-  // on a run that outlasted the CPU work: large = GPU-bound, ~0 = CPU-bound
-  // (the GPU idles between runs).
+  // waitMs is time blocked on a run that outlasted the CPU work: large = GPU-bound, ~0 = CPU-bound.
   let prepareMs = 0;
   let extractMs = 0;
   let waitMs = 0;
@@ -150,9 +143,7 @@ async function runChunkPipeline(opts: PipelineOptions): Promise<PipelineResult> 
       opts.onProgress(chunkIndex, opts.totalChunks);
     }
   } finally {
-    // ORT sessions don't allow concurrent runs, and run(i+1) is started before
-    // chunk i is extracted. On cancel or error, let any run still in flight
-    // settle before returning or throwing so the session is idle afterwards.
+    // Let a run still in flight settle so the session is idle after a cancel or error.
     if (profileChunk >= 0) stopKernelProfile(runtime.env);
     if (inFlight) await inFlight.run.catch(() => {});
   }

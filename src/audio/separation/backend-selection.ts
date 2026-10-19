@@ -20,10 +20,7 @@ interface GpuAdapterLike {
   requestAdapterInfo?: () => Promise<GpuAdapterInfoLike>;
 }
 
-// WebGPU can look available while only a software (CPU-emulated) adapter exists,
-// e.g. Linux Chrome without Vulkan. Running HTDemucs on it pegs the CPU and
-// stalls for minutes, so treat "no adapter" and "software adapter" as reasons to
-// use the WASM path instead.
+// A software adapter (e.g. Linux Chrome without Vulkan) stalls HTDemucs for minutes, so use WASM.
 async function chooseBackend(forceWasm: boolean | undefined): Promise<BackendChoice> {
   if (forceWasm) return { backend: "wasm", reason: "WASM was requested explicitly" };
   const gpu = (navigator as Navigator & { gpu?: { requestAdapter(o?: object): Promise<GpuAdapterLike | null> } }).gpu;
@@ -58,10 +55,7 @@ async function chooseBackend(forceWasm: boolean | undefined): Promise<BackendCho
   };
 }
 
-// The fp16 model's WebGPU kernels need the `shader-f16` device feature. Without
-// it session creation fails, and the WASM fallback runs fp16 about 4x slower
-// than fp32 (and ~60x slower than WebGPU), so refuse up front, before the
-// download, with a message the user can act on.
+// Without shader-f16 the fp16 session fails and fp16 on WASM is too slow, so refuse before the download.
 function describeUnsupportedVariant(variant: VocalModelVariant, choice: BackendChoice): string | null {
   if (variant === "fp16" && choice.backend === "webgpu" && !choice.hasShaderF16) {
     return `The fp16 model needs WebGPU shader-f16 support, which this browser/GPU (${choice.adapterLabel}) does not provide. Set the "Vocal model precision" setting to fp32.`;

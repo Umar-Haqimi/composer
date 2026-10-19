@@ -4,8 +4,6 @@ import type { VocalModelVariant } from "@/stores/settings";
 interface InitOptions {
   variant: VocalModelVariant;
   forceWasm?: boolean;
-  /** Log real GPU kernel time (WebGPU timestamp queries). Defaults to the localStorage debug flag. */
-  profile?: boolean;
   onProgress?: (loaded: number, total: number) => void;
 }
 
@@ -21,13 +19,12 @@ interface ProcessResult {
   totalFrames: number;
 }
 
-// init() has no fixed deadline because the model download can legitimately take
-// minutes. Instead it fails if the worker goes quiet (no progress, no result)
-// for this long, which is what a hung ORT session create looks like.
+const LOG_PREFIX = "[separation-host]";
+
+// No fixed init deadline: the download can take minutes, so fail only when the worker goes quiet.
 const INIT_INACTIVITY_TIMEOUT_MS = 120_000;
 
-// Set `localStorage["composer.profileSeparation"] = "1"` in DevTools to log GPU
-// kernel time. Off by default because timestamp queries add overhead.
+// Opt-in via localStorage["composer.profileSeparation"] = "1": timestamp queries add GPU overhead.
 function readProfileFlag(): boolean {
   try {
     return localStorage.getItem("composer.profileSeparation") === "1";
@@ -53,11 +50,11 @@ class SeparationWorker {
     if (!this.worker) {
       this.worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
       this.worker.addEventListener("error", (ev) => {
-        console.error("[separation-host] worker error event", ev.message, ev.filename, ev.lineno, ev);
+        console.error(LOG_PREFIX, "worker error event", ev.message, ev.filename, ev.lineno, ev);
         this.failCurrent(workerError(`Separation worker crashed: ${ev.message || "unknown error"}`, "worker-error"));
       });
       this.worker.addEventListener("messageerror", (ev) => {
-        console.error("[separation-host] worker messageerror", ev);
+        console.error(LOG_PREFIX, "worker messageerror", ev);
         this.failCurrent(workerError("Separation worker sent an unreadable message.", "worker-messageerror"));
       });
       this.worker.addEventListener("message", (ev: MessageEvent<OutboundMessage>) => this.onMessage(ev.data));
@@ -109,8 +106,7 @@ class SeparationWorker {
     }, INIT_INACTIVITY_TIMEOUT_MS);
   }
 
-  // Rejects the in-flight request and tears the worker down: after a crash or
-  // hang its state is unknown, so the next call starts from a fresh worker.
+  // After a crash or hang the worker state is unknown, so the next call starts from a fresh worker.
   private failCurrent(err: Error) {
     const reject = this.currentReject;
     this.dispose();
@@ -141,7 +137,7 @@ class SeparationWorker {
         type: "init",
         variant: opts.variant,
         forceWasm: opts.forceWasm,
-        profile: opts.profile ?? readProfileFlag(),
+        profile: readProfileFlag(),
       });
     });
   }

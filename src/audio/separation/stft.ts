@@ -20,9 +20,7 @@ function hannWindow(size: number): Float32Array {
   return w;
 }
 
-// Twiddle factors and the bit-reversal permutation depend only on the FFT
-// length, so build them once. Recomputing cos/sin per butterfly dominated the
-// per-chunk CPU time and left the GPU idle between inference calls.
+// Recomputing cos/sin per butterfly dominated per-chunk CPU time, so build the plan once per length.
 interface FftPlan {
   bitReversed: Uint32Array;
   cos: Float64Array;
@@ -49,8 +47,7 @@ function getFftPlan(n: number): FftPlan {
     bitReversed[i] = reversed;
   }
 
-  // w_k = exp(-2*pi*i*k/n) for k in [0, n/2). A stage of size `size` uses every
-  // (n/size)-th entry.
+  // w_k = exp(-2*pi*i*k/n) for k < n/2; a stage of size `size` uses every (n/size)-th entry.
   const cos = new Float64Array(n / 2);
   const sin = new Float64Array(n / 2);
   for (let k = 0; k < n / 2; k++) {

@@ -38,8 +38,7 @@ const WEBGPU_POWER_PREFERENCE = "high-performance";
 
 let loaded: Ort | null = null;
 
-// Injected by Vite from the installed onnxruntime-web package. The WASM/JSEP
-// loader files fetched from the CDN must match the bundled JS exactly.
+// The CDN WASM/JSEP loader files must match the bundled JS version exactly.
 function getOrtVersion(): string {
   return import.meta.env.VITE_ORT_VERSION;
 }
@@ -50,12 +49,9 @@ async function loadOrt(backend: Backend, profile: boolean): Promise<Ort> {
   const candidate = (mod as unknown as { default?: Ort }).default ?? (mod as unknown as Ort);
   candidate.env.wasm.numThreads = 1;
   candidate.env.wasm.wasmPaths = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${getOrtVersion()}/dist/`;
-  // Ask for the discrete GPU on hybrid-graphics machines. chooseBackend probes
-  // with the same options, so its verdict matches the adapter ORT will get.
+  // Discrete GPU on hybrid graphics; chooseBackend probes with the same options.
   if (candidate.env.webgpu) candidate.env.webgpu.powerPreference = WEBGPU_POWER_PREFERENCE;
-  // Opt-in: per-kernel GPU timestamps (ns). Left "off" here and switched on for
-  // a single chunk by the pipeline: ORT's standard timestamp-query mode ends a
-  // compute pass per kernel, which makes profiled runs many times slower.
+  // Switched on for one chunk by the pipeline: timestamp-query mode makes profiled runs much slower.
   if (profile && candidate.env.webgpu) {
     candidate.env.webgpu.profiling = { mode: "off", ondata: recordKernel };
   }
