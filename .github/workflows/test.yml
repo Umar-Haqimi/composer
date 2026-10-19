@@ -36,6 +36,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+
     steps:
       - uses: actions/checkout@v4
 
@@ -52,7 +57,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Unit tests (jsdom)
-        run: pnpm test:unit
+        run: pnpm test:unit --shard=${{ matrix.shard }}/2
 
   component:
     runs-on: ubuntu-latest
@@ -61,7 +66,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
 
     steps:
       - uses: actions/checkout@v4
@@ -94,7 +99,7 @@ jobs:
         run: pnpm exec playwright install-deps chromium
 
       - name: Component tests (Chromium)
-        run: pnpm test:component --shard=${{ matrix.shard }}/2
+        run: pnpm test:component --shard=${{ matrix.shard }}/3
 
   # The master ruleset requires a check named "test".
   test:
