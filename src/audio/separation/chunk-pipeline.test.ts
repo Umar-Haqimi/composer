@@ -107,22 +107,6 @@ describe("runChunkPipeline", () => {
     await expect(promise).rejects.toThrow("Missing output tensor");
   });
 
-  it("regression: does not start the next run after a cancel arrives during a run", async () => {
-    let runs = 0;
-    const session: OrtSession = {
-      inputNames: [],
-      outputNames: [],
-      run: () => {
-        runs++;
-        return Promise.resolve(validOutputs());
-      },
-    };
-    let checks = 0;
-    const result = await runChunkPipeline(makeOptions(session, () => ++checks > 1));
-    expect(result).toEqual({ status: "cancelled" });
-    expect(runs).toBe(1);
-  });
-
   it("returns every chunk when not cancelled", async () => {
     const session: OrtSession = {
       inputNames: [],
@@ -132,5 +116,23 @@ describe("runChunkPipeline", () => {
     const result = await runChunkPipeline(makeOptions(session, () => false));
     expect(result.status).toBe("done");
     if (result.status === "done") expect(result.chunks).toHaveLength(2);
+  });
+
+  describe("regressions", () => {
+    it("regression: does not start the next run after a cancel arrives during a run", async () => {
+      let runs = 0;
+      const session: OrtSession = {
+        inputNames: [],
+        outputNames: [],
+        run: () => {
+          runs++;
+          return Promise.resolve(validOutputs());
+        },
+      };
+      let checks = 0;
+      const result = await runChunkPipeline(makeOptions(session, () => ++checks > 1));
+      expect(result).toEqual({ status: "cancelled" });
+      expect(runs).toBe(1);
+    });
   });
 });
