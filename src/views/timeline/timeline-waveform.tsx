@@ -2,11 +2,13 @@ import { useAudioStore } from "@/stores/audio";
 import { useProjectStore } from "@/stores/project";
 import { useSettingsStore } from "@/stores/settings";
 import { useThemeStore } from "@/stores/theme";
+import { isAbortError } from "@/utils/abort-error";
 import { cn } from "@/utils/cn";
 import { readToken } from "@/utils/theme/read-token";
 import { snapPlayheadTime } from "@/views/timeline/playhead-snap";
 import { snapTimeToOnset } from "@/views/timeline/snap-marker-math";
 import { WAVEFORM_HEIGHT, useTimelineStore } from "@/views/timeline/timeline-store";
+import { WaveformFocusShade } from "@/views/timeline/waveform-focus-shade";
 import WavesurferPlayer from "@wavesurfer/react";
 import { useCallback, useEffect, useState } from "react";
 import type WaveSurfer from "wavesurfer.js";
@@ -14,6 +16,7 @@ import type WaveSurfer from "wavesurfer.js";
 // -- Constants -----------------------------------------------------------------
 
 const FADE_SETTLE_MS = 260;
+const LOG_PREFIX = "[TimelineWaveform]";
 
 // -- Component -----------------------------------------------------------------
 
@@ -41,7 +44,7 @@ const TimelineWaveform: React.FC = () => {
     wave: readToken("wave"),
     progress: readToken("wave-progress"),
   }));
-  // @wavesurfer/react rebuilds the instance whenever any option changes; later zooms go through ws.zoom().
+  // @wavesurfer/react rebuilds the instance whenever any option changes; later zooms go through ws.setOptions(), which unlike ws.zoom() never throws mid-reload.
   const [initialZoom] = useState(() => useTimelineStore.getState().zoom);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: activeThemeId re-applies DOM-resolved colors on theme change without remounting WaveSurfer
@@ -53,7 +56,10 @@ const TimelineWaveform: React.FC = () => {
   useEffect(() => {
     if (!ws || !audioElement) return;
     const onLoadStart = () => {
-      if (audioElement.src) void ws.load(audioElement.src);
+      if (!audioElement.src) return;
+      ws.load(audioElement.src).catch((error: unknown) => {
+        if (!isAbortError(error)) console.error(LOG_PREFIX, "waveform reload failed", error);
+      });
     };
     audioElement.addEventListener("loadstart", onLoadStart);
     return () => audioElement.removeEventListener("loadstart", onLoadStart);
@@ -61,7 +67,7 @@ const TimelineWaveform: React.FC = () => {
 
   useEffect(() => {
     if (!ws) return;
-    ws.zoom(zoom);
+    ws.setOptions({ minPxPerSec: zoom });
   }, [ws, zoom]);
 
   useEffect(() => {
@@ -155,6 +161,7 @@ const TimelineWaveform: React.FC = () => {
           />
         </div>
       )}
+      <WaveformFocusShade />
       <div
         role="button"
         tabIndex={-1}

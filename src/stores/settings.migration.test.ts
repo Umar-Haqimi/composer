@@ -1,4 +1,5 @@
-import { DEFAULTS, migrateSettingsForTest, useSettingsStore } from "@/stores/settings";
+import { DEFAULTS, useSettingsStore } from "@/stores/settings";
+import { migrateSettings } from "@/stores/settings-migration";
 import { beforeEach, describe, expect, it } from "vitest";
 
 // A settings blob as written by 1.37.x: every key is present, so an
@@ -24,7 +25,7 @@ describe("preserveBracketsOnExtraction migration", () => {
   });
 
   it("regression: the fix reaches an existing user, not just a fresh profile", async () => {
-    const migrated = migrateSettingsForTest(legacyBlob(), 5) as { preserveBracketsOnExtraction: boolean };
+    const migrated = migrateSettings(legacyBlob(), 5) as { preserveBracketsOnExtraction: boolean };
     expect(migrated.preserveBracketsOnExtraction).toBe(true);
   });
 
@@ -48,12 +49,12 @@ describe("preserveBracketsOnExtraction migration", () => {
 
   it("edge case: tolerates a blob missing the key entirely", () => {
     const { preserveBracketsOnExtraction: _omitted, ...blob } = legacyBlob();
-    const migrated = migrateSettingsForTest(blob, 5) as { preserveBracketsOnExtraction: boolean };
+    const migrated = migrateSettings(blob, 5) as { preserveBracketsOnExtraction: boolean };
     expect(migrated.preserveBracketsOnExtraction).toBe(true);
   });
 
   it("edge case: tolerates a null persisted state", () => {
-    expect(migrateSettingsForTest(null, 5)).toBeNull();
+    expect(migrateSettings(null, 5)).toBeNull();
   });
 
   it("invariant: a fresh profile already gets the new default", () => {
@@ -74,6 +75,40 @@ describe("syllablesFollowRolling", () => {
   });
 });
 
+describe("retired confirmReplaceProjectFromHash", () => {
+  it("drops the retired key from a persisted blob", async () => {
+    await rehydrateAt(6, legacyBlob({ confirmReplaceProjectFromHash: false }));
+    expect("confirmReplaceProjectFromHash" in useSettingsStore.getState()).toBe(false);
+  });
+
+  it("keeps the other confirmations while dropping it", () => {
+    const migrated = migrateSettings(
+      legacyBlob({ confirmReplaceProjectFromHash: false, confirmReplaceLyrics: false }),
+      6,
+    ) as Record<string, unknown>;
+    expect(migrated).not.toHaveProperty("confirmReplaceProjectFromHash");
+    expect(migrated.confirmReplaceLyrics).toBe(false);
+  });
+});
+
+describe("library preference validation", () => {
+  it("drops an unknown sort, view or launch screen so the defaults apply", async () => {
+    await rehydrateAt(6, legacyBlob({ librarySort: "size", libraryView: "table", launchScreen: "editor" }));
+    const state = useSettingsStore.getState();
+    expect(state.librarySort).toBe(DEFAULTS.librarySort);
+    expect(state.libraryView).toBe(DEFAULTS.libraryView);
+    expect(state.launchScreen).toBe(DEFAULTS.launchScreen);
+  });
+
+  it("keeps valid choices", async () => {
+    await rehydrateAt(6, legacyBlob({ librarySort: "title", libraryView: "grid", launchScreen: "last-project" }));
+    const state = useSettingsStore.getState();
+    expect(state.librarySort).toBe("title");
+    expect(state.libraryView).toBe("grid");
+    expect(state.launchScreen).toBe("last-project");
+  });
+});
+
 describe("previewSidebarWidth", () => {
   it("gives a saved blob from before the setting existed the default width", async () => {
     const { previewSidebarWidth: _omitted, ...withoutWidth } = legacyBlob();
@@ -84,5 +119,34 @@ describe("previewSidebarWidth", () => {
   it("keeps a remembered width across a rehydrate", async () => {
     await rehydrateAt(6, legacyBlob({ previewSidebarWidth: 480 }));
     expect(useSettingsStore.getState().previewSidebarWidth).toBe(480);
+  });
+});
+
+describe("lastPlaybackRate", () => {
+  function v8Blob(defaultPlaybackRate: unknown): Record<string, unknown> {
+    const { lastPlaybackRate: _last, rememberPlaybackRate: _remember, ...blob } = legacyBlob({ defaultPlaybackRate });
+    return blob;
+  }
+
+  it("regression: an existing user keeps the speed they last used", async () => {
+    await rehydrateAt(8, v8Blob(1.1));
+    expect(useSettingsStore.getState().lastPlaybackRate).toBe(1.1);
+    expect(useSettingsStore.getState().defaultPlaybackRate).toBe(1.1);
+    expect(useSettingsStore.getState().rememberPlaybackRate).toBe(true);
+  });
+
+  it("falls back to the default when an old blob has no usable rate", async () => {
+    await rehydrateAt(8, v8Blob("fast"));
+    expect(useSettingsStore.getState().lastPlaybackRate).toBe(DEFAULTS.lastPlaybackRate);
+  });
+
+  it("copies nothing at the current version", async () => {
+    await rehydrateAt(9, v8Blob(1.1));
+    expect(useSettingsStore.getState().lastPlaybackRate).toBe(DEFAULTS.lastPlaybackRate);
+  });
+
+  it("leaves a saved last speed alone", async () => {
+    await rehydrateAt(8, { ...v8Blob(1.1), lastPlaybackRate: 0.8 });
+    expect(useSettingsStore.getState().lastPlaybackRate).toBe(0.8);
   });
 });

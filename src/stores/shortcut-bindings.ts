@@ -1,12 +1,12 @@
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import {
+  SHORTCUT_REGISTRY,
   type ShortcutBinding,
   type ShortcutDefinition,
   type ShortcutScope,
-  SHORTCUT_REGISTRY,
   getShortcutById,
 } from "@/stores/shortcut-registry";
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 // -- Types --------------------------------------------------------------------
 
@@ -14,6 +14,26 @@ interface ShortcutBindingsState {
   overrides: Record<string, ShortcutBinding>;
   resetBinding: (id: string) => void;
   resetAllBindings: () => void;
+}
+
+// -- Migration ----------------------------------------------------------------
+
+const SHORTCUT_BINDINGS_PERSIST_VERSION = 1;
+const UNBOUND: ShortcutBinding = { key: "" };
+const ALTERNATE_REDO_ID = "global.redoAlternate";
+
+function migrateShortcutBindings(persistedState: unknown, version: number): unknown {
+  if (version >= 1 || !persistedState || typeof persistedState !== "object") return persistedState;
+  const { overrides } = persistedState as Partial<ShortcutBindingsState>;
+  const alternateRedo = getShortcutById(ALTERNATE_REDO_ID);
+  if (!overrides || typeof overrides !== "object" || !alternateRedo || overrides[ALTERNATE_REDO_ID]) {
+    return persistedState;
+  }
+  const keysTaken = Object.values(overrides).some(
+    (binding) => typeof binding?.key === "string" && bindingsEqual(binding, alternateRedo.defaultBinding),
+  );
+  if (!keysTaken) return persistedState;
+  return { ...persistedState, overrides: { ...overrides, [ALTERNATE_REDO_ID]: UNBOUND } };
 }
 
 // -- Store --------------------------------------------------------------------
@@ -29,13 +49,15 @@ const useShortcutBindingsStore = create<ShortcutBindingsState>()(
         }),
       resetAllBindings: () => set({ overrides: {} }),
     }),
-    { name: "composer-shortcut-bindings" },
+    {
+      name: "composer-shortcut-bindings",
+      version: SHORTCUT_BINDINGS_PERSIST_VERSION,
+      migrate: migrateShortcutBindings,
+    },
   ),
 );
 
 // -- Helpers ------------------------------------------------------------------
-
-const UNBOUND: ShortcutBinding = { key: "" };
 
 function getEffectiveBinding(id: string): ShortcutBinding {
   const override = useShortcutBindingsStore.getState().overrides[id];
@@ -108,6 +130,7 @@ function getShortcutDescription(id: string): string {
 
 export {
   useShortcutBindingsStore,
+  migrateShortcutBindings,
   assignBinding,
   bindingsEqual,
   bindingToKeys,

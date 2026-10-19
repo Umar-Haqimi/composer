@@ -27,6 +27,7 @@ export default defineConfig({
     include: [
       "@tabler/icons-react",
       "@braccato/core",
+      "@kawarp/core",
       "@floating-ui/react",
       "overlayscrollbars-react",
       "motion/react",
@@ -69,7 +70,11 @@ export default defineConfig({
             enabled: true,
             provider: playwright({
               launchOptions: {
-                args: ["--autoplay-policy=no-user-gesture-required", "--js-flags=--expose-gc"],
+                args: [
+                  "--autoplay-policy=no-user-gesture-required",
+                  "--enable-unsafe-swiftshader",
+                  "--js-flags=--expose-gc",
+                ],
               },
             }),
             headless: true,
