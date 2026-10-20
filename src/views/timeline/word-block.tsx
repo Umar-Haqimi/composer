@@ -2,6 +2,7 @@ import { cn } from "@/utils/cn";
 import type { SyllablePosition } from "@/domain/word/syllable-groups";
 import { selfKey } from "@/views/timeline/snap";
 import { useTimelineStore } from "@/views/timeline/timeline-store";
+import { WordEdgeHandle } from "@/views/timeline/word-edge-handle";
 import { useDraggable } from "@dnd-kit/core";
 
 // -- Types ---------------------------------------------------------------------
@@ -44,6 +45,21 @@ const SYLLABLE_RADIUS: Record<SyllablePosition, string> = {
   middle: "rounded-none",
   last: "rounded-r-xl rounded-l-none",
 };
+
+function syllableBorderStyle(
+  position: SyllablePosition,
+  isSelected: boolean,
+  gapBefore: boolean | undefined,
+): React.CSSProperties {
+  if (isSelected) return {};
+  const style: React.CSSProperties = {};
+  if (position === "first" || position === "middle") style.borderRightStyle = "dashed";
+  if (position === "middle" || position === "last") {
+    if (gapBefore) style.borderLeftStyle = "dashed";
+    else style.borderLeftWidth = 0;
+  }
+  return style;
+}
 
 const WordBlock: React.FC<WordBlockProps> = ({
   id,
@@ -96,25 +112,7 @@ const WordBlock: React.FC<WordBlockProps> = ({
     },
   });
 
-  const handleResizeStart = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    e.stopPropagation();
-    e.preventDefault();
-    const edge = e.currentTarget.dataset.edge as "left" | "right";
-    onResizeStart(edge, e.clientX);
-  };
-
-  const syllableBorder: React.CSSProperties = {};
-  if (!isSelected && (syllablePosition === "first" || syllablePosition === "middle")) {
-    syllableBorder.borderRightStyle = "dashed";
-  }
-  if (!isSelected && (syllablePosition === "middle" || syllablePosition === "last")) {
-    if (gapBefore) {
-      syllableBorder.borderLeftStyle = "dashed";
-    } else {
-      syllableBorder.borderLeftWidth = 0;
-    }
-  }
+  const syllableBorder = syllableBorderStyle(syllablePosition, isSelected, gapBefore);
 
   return (
     <div
@@ -124,7 +122,7 @@ const WordBlock: React.FC<WordBlockProps> = ({
       data-syllable-position={syllablePosition}
       className={cn(
         "absolute top-1 bottom-1 flex items-center justify-center",
-        "text-xs text-composer-text truncate select-none cursor-grab",
+        "text-xs text-composer-text whitespace-nowrap select-none cursor-grab",
         "border transition-opacity duration-100",
         SYLLABLE_RADIUS[syllablePosition],
         isDimmed && "opacity-30",
@@ -160,54 +158,29 @@ const WordBlock: React.FC<WordBlockProps> = ({
         if (e.key === "Enter" || e.key === " ") onClick(e as unknown as React.MouseEvent);
       }}
     >
-      <div
-        data-edge="left"
-        role="separator"
-        aria-orientation="vertical"
-        aria-hidden="true"
-        className={cn(
-          "absolute left-0 top-0 bottom-0 w-2 z-10",
-          showLeftGrip
-            ? "cursor-ew-resize bg-composer-text/10 hover:bg-composer-text/20"
-            : [
-                "hover:bg-composer-text/10",
-                (syllableEdgesJoin && (syllablePosition === "middle" || syllablePosition === "last")) || leftConjoined
-                  ? "cursor-col-resize"
-                  : "cursor-ew-resize",
-                leftHighlighted && "bg-composer-text/10",
-              ],
-        )}
-        data-grip={showLeftGrip || undefined}
-        onMouseDown={handleResizeStart}
-        onPointerDown={(e) => e.stopPropagation()}
-        onMouseEnter={() => onEdgeHover?.("left", true)}
-        onMouseLeave={() => onEdgeHover?.("left", false)}
+      <WordEdgeHandle
+        edge="left"
+        syllablePosition={syllablePosition}
+        syllableEdgesJoin={syllableEdgesJoin}
+        borderless={syllableBorder.borderLeftWidth === 0}
+        conjoined={leftConjoined}
+        highlighted={leftHighlighted}
+        showGrip={showLeftGrip}
+        onResizeStart={onResizeStart}
+        onEdgeHover={onEdgeHover}
       />
 
       {showText && <span className="px-1 pointer-events-none truncate">{text}</span>}
 
-      <div
-        data-edge="right"
-        role="separator"
-        aria-orientation="vertical"
-        aria-hidden="true"
-        className={cn(
-          "absolute right-0 top-0 bottom-0 w-2 z-10",
-          showRightGrip
-            ? "cursor-ew-resize bg-composer-text/10 hover:bg-composer-text/20"
-            : [
-                "hover:bg-composer-text/10",
-                (syllableEdgesJoin && (syllablePosition === "first" || syllablePosition === "middle")) || rightConjoined
-                  ? "cursor-col-resize"
-                  : "cursor-ew-resize",
-                rightHighlighted && "bg-composer-text/10",
-              ],
-        )}
-        data-grip={showRightGrip || undefined}
-        onMouseDown={handleResizeStart}
-        onPointerDown={(e) => e.stopPropagation()}
-        onMouseEnter={() => onEdgeHover?.("right", true)}
-        onMouseLeave={() => onEdgeHover?.("right", false)}
+      <WordEdgeHandle
+        edge="right"
+        syllablePosition={syllablePosition}
+        syllableEdgesJoin={syllableEdgesJoin}
+        conjoined={rightConjoined}
+        highlighted={rightHighlighted}
+        showGrip={showRightGrip}
+        onResizeStart={onResizeStart}
+        onEdgeHover={onEdgeHover}
       />
     </div>
   );
