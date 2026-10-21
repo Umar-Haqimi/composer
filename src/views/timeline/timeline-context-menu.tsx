@@ -1,7 +1,6 @@
 import { getAgentColor } from "@/domain/agent/colors";
 import type { LyricLine } from "@/domain/line/model";
 import { selectionBounds } from "@/domain/selection/bounds";
-import { isWordSelected } from "@/domain/selection/identity";
 import { lineWordSelections } from "@/domain/selection/line-selections";
 import type { WordSelection } from "@/domain/selection/model";
 import { useProjectStore } from "@/stores/project";
@@ -130,6 +129,11 @@ function splitIntoWordsLabel(count: number): string {
   return count > 1 ? `Split ${count} lines into words` : "Split into words";
 }
 
+function deleteWordLabel(selectionCount: number | null, isSyllable: boolean): string {
+  if (selectionCount !== null && selectionCount > 1) return `Delete ${pluralize(selectionCount, "word")}`;
+  return isSyllable ? "Delete syllable" : "Delete word";
+}
+
 // -- Positioning --------------------------------------------------------------
 
 function useContextMenuFloating(contextMenu: ContextMenuState | null, clearContextMenu: () => void) {
@@ -246,7 +250,14 @@ type WordTarget = Extract<ContextMenuTarget, { kind: "word" }>;
 
 function WordMenuSection({ targets, clearContextMenu, target }: SectionProps & { target: WordTarget }) {
   const selectedWords = useTimelineStore((s) => s.selectedWords);
-  const { mergeInfo, groupedWordInfo, snapNeededInfo, splitIntoWordsInfo, explicitToggleContext } = targets;
+  const {
+    mergeInfo,
+    groupedWordInfo,
+    snapNeededInfo,
+    splitIntoWordsInfo,
+    explicitToggleContext,
+    clickedSelectionCount,
+  } = targets;
   const {
     handleEditWord,
     handleSplitSyllables,
@@ -264,9 +275,9 @@ function WordMenuSection({ targets, clearContextMenu, target }: SectionProps & {
     wordIndex: target.wordIndex,
     type: target.type,
   };
-  const playsSelection = isWordSelected(selectedWords, word.lineId, word.wordIndex, word.type);
-  const playedWords = playsSelection ? selectedWords : [word];
-  const noun = playsSelection && selectedWords.length > 1 ? pluralize(selectedWords.length, "word") : "word";
+  const playedWords = clickedSelectionCount === null ? [word] : selectedWords;
+  const noun =
+    clickedSelectionCount !== null && clickedSelectionCount > 1 ? pluralize(clickedSelectionCount, "word") : "word";
 
   return (
     <>
@@ -322,8 +333,8 @@ function WordMenuSection({ targets, clearContextMenu, target }: SectionProps & {
       )}
       <MenuDivider />
       <MenuItem
-        label={groupedWordInfo ? "Delete syllable" : "Delete word"}
-        shortcut={["Del"]}
+        label={deleteWordLabel(clickedSelectionCount, groupedWordInfo !== null)}
+        shortcut={clickedSelectionCount === null ? undefined : getEffectiveKeysArray("timeline.deleteSelection")}
         onClick={handleDeleteWord}
         danger
       />

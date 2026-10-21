@@ -18,9 +18,36 @@ interface ShortcutBindingsState {
 
 // -- Migration ----------------------------------------------------------------
 
-const SHORTCUT_BINDINGS_PERSIST_VERSION = 2;
+const SHORTCUT_BINDINGS_PERSIST_VERSION = 3;
 const UNBOUND: ShortcutBinding = { key: "" };
+
 const ALTERNATE_REDO_ID = "global.redoAlternate";
+const DELETE_SELECTION_IDS = ["timeline.deleteSelection", "timeline.deleteSelectionAlternate"];
+
+function unbindIfKeysTaken(
+  overrides: Record<string, ShortcutBinding>,
+  addedId: string,
+): Record<string, ShortcutBinding> {
+  const added = getShortcutById(addedId);
+  if (!added || overrides[addedId]) return overrides;
+  const keysTaken = Object.entries(overrides).some(([id, binding]) => {
+    const owner = getShortcutById(id);
+    return (
+      owner !== undefined &&
+      scopesConflict(added.scope, owner.scope) &&
+      typeof binding?.key === "string" &&
+      bindingsEqual(binding, added.defaultBinding)
+    );
+  });
+  return keysTaken ? { ...overrides, [addedId]: UNBOUND } : overrides;
+}
+
+function unbindTakenDeleteKeys(state: Partial<ShortcutBindingsState>): Partial<ShortcutBindingsState> {
+  const { overrides } = state;
+  if (!overrides || typeof overrides !== "object") return state;
+  const migrated = DELETE_SELECTION_IDS.reduce(unbindIfKeysTaken, overrides);
+  return migrated === overrides ? state : { ...state, overrides: migrated };
+}
 
 const RENAMED_SHORTCUT_IDS: Record<string, string> = { "timeline.toggleGroupLoop": "global.toggleLoop" };
 
@@ -81,7 +108,8 @@ function migrateShortcutBindings(persistedState: unknown, version: number): unkn
   if (!persistedState || typeof persistedState !== "object") return persistedState;
   const state = persistedState as Partial<ShortcutBindingsState>;
   const withRedo = version < 1 ? unbindTakenAlternateRedo(state) : state;
-  return version < 2 ? renameShortcutIds(withRedo) : withRedo;
+  const renamed = version < 2 ? renameShortcutIds(withRedo) : withRedo;
+  return version < 3 ? unbindTakenDeleteKeys(renamed) : renamed;
 }
 
 // -- Store --------------------------------------------------------------------
