@@ -371,7 +371,9 @@ const WordTrack: React.FC<WordTrackProps> = ({
       updateLineWithHistory(lineId, manualBackgroundWordEdit(newWords));
     }
 
-    useTimelineStore.getState().setEditingWord({ lineId, wordIndex: newIndex, type: trackType });
+    const timeline = useTimelineStore.getState();
+    timeline.clearSelection();
+    timeline.setEditingWord({ lineId, wordIndex: newIndex, type: trackType });
   };
 
   const handleTrackContextMenu = (e: React.MouseEvent) => {
