@@ -1,4 +1,5 @@
 import { pastedRows } from "@/domain/language/paste-import";
+import { useLanguagesHistoryShortcuts } from "@/hooks/useLanguagesHistoryShortcuts";
 import { useProjectStore } from "@/stores/project";
 import { Button } from "@/ui/button";
 import { EmptyState } from "@/ui/empty-state";
@@ -19,7 +20,19 @@ import { IconChevronDown } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+// -- Interfaces ---------------------------------------------------------------
+
+interface GenerationOptions {
+  force?: boolean;
+  source?: string;
+  transliteration?: boolean;
+  // Filling tracks on entry follows the lyrics, so it joins the step that changed them instead of clearing redo.
+  joinCurrentStep?: boolean;
+}
+
 // -- Constants ----------------------------------------------------------------
+
+const LOG_PREFIX = "[Languages]";
 
 const SOURCE_SELECT_OPTIONS = SOURCE_LANGUAGE_OPTIONS.map(([value, label]) => ({ value, label }));
 
@@ -43,12 +56,13 @@ const LanguagesPanel: React.FC = () => {
   const abortRef = useRef<AbortController | null>(null);
   const sourceLanguage = metadata.language || "auto";
   const generate = useCallback(
-    async (
-      requestedTargets: string[],
-      force = false,
-      requestedSource = sourceLanguage,
-      includeTransliteration = true,
-    ) => {
+    async (requestedTargets: string[], options: GenerationOptions = {}) => {
+      const {
+        force = false,
+        source: requestedSource = sourceLanguage,
+        transliteration: includeTransliteration = true,
+        joinCurrentStep = false,
+      } = options;
       const startingState = useProjectStore.getState();
       if (startingState.lines.length === 0 || abortRef.current) return;
       const startingLines = new Map(startingState.lines.map((line) => [line.id, line]));
@@ -81,13 +95,16 @@ const LanguagesPanel: React.FC = () => {
           { force, transliteration: generation.transliteration, translations: generation.translations },
           edits,
         );
-        if (updates.length > 0) updateLinesWithHistory(updates, { deriveText: false, propagateToSiblings: false });
+        if (updates.length > 0 && joinCurrentStep) currentState.applyLineUpdatesToCurrentStep(updates);
+        else if (updates.length > 0) updateLinesWithHistory(updates, { deriveText: false, propagateToSiblings: false });
         const detected = generation.detectedLanguage;
         if (updates.length > 0 && !currentState.metadata.language && detected && detected !== "auto") {
           setMetadata({ language: detected });
         }
       } catch (error) {
-        if ((error as Error).name !== "AbortError") toast.error("Couldn't generate some lines. Try Regenerate.");
+        if ((error as Error).name === "AbortError") return;
+        console.warn(LOG_PREFIX, "generation failed", error);
+        toast.error("Couldn't generate some lines. Try Regenerate.");
       } finally {
         stop();
         if (abortRef.current === controller) {
@@ -112,8 +129,9 @@ const LanguagesPanel: React.FC = () => {
   useEffect(() => {
     if (activeTab !== "languages" || generatedOnEntry.current || lines.length === 0) return;
     generatedOnEntry.current = true;
-    void generate(targets);
+    void generate(targets, { joinCurrentStep: true });
   }, [activeTab, generate, lines.length, targets]);
+  useLanguagesHistoryShortcuts(activeTab === "languages");
   const languageName = useMemo(() => new Map<string, string>(LANGUAGE_OPTIONS), []);
   const availableLanguages = LANGUAGE_OPTIONS.filter(([code]) => !targets.includes(code));
   const removeTarget = (language: string) => {
@@ -142,7 +160,7 @@ const LanguagesPanel: React.FC = () => {
       requestedTargets = [...targets, "en"];
       setTargets(requestedTargets);
     }
-    void generate(requestedTargets, false, selected);
+    void generate(requestedTargets, { source: selected });
   };
 
   if (lines.length === 0) {
@@ -206,9 +224,9 @@ const LanguagesPanel: React.FC = () => {
             isGenerating={isGenerating}
             translations={targets}
             languageNames={languageName}
-            onRegenerateAll={() => void generate(targets, true)}
+            onRegenerateAll={() => void generate(targets, { force: true })}
             onRegenerateSelection={(selection) =>
-              void generate(selection.translations, true, sourceLanguage, selection.transliteration)
+              void generate(selection.translations, { force: true, transliteration: selection.transliteration })
             }
           />
         </div>

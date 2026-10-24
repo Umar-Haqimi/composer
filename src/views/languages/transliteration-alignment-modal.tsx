@@ -47,6 +47,7 @@ function groupBoundaryPoints(words: WordTiming[]): number[] {
 
 const TransliterationAlignmentModal: React.FC<TransliterationAlignmentModalProps> = ({ line, field, onClose }) => {
   const updateLine = useProjectStore((state) => state.updateLine);
+  const commitPendingLineEdit = useProjectStore((state) => state.commitPendingLineEdit);
   const track = line.transliteration;
   const canonicalText = field === "words" ? track?.text : track?.backgroundText;
   const sourceWords = line[field];
@@ -118,6 +119,8 @@ const TransliterationAlignmentModal: React.FC<TransliterationAlignmentModalProps
         };
       }
     }
+    // A language-only edit, so it must not reach the shared timing copy that history writes run.
+    const { lines: baseline, isDirtySinceHistory: baselineWasDirty } = useProjectStore.getState();
     updateLine(
       line.id,
       {
@@ -131,6 +134,7 @@ const TransliterationAlignmentModal: React.FC<TransliterationAlignmentModalProps
       },
       { deriveText: false },
     );
+    commitPendingLineEdit(baseline, baselineWasDirty);
     onClose();
   };
 
