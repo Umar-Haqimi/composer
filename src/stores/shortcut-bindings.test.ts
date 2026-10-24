@@ -135,6 +135,22 @@ describe("migrateShortcutBindings", () => {
     );
   });
 
+  it("leaves a fine seek shortcut unbound when a saved binding already uses its keys", () => {
+    const saved = { overrides: { "timeline.toggleFollow": { key: ">", shift: true, alt: true } } };
+
+    expect(migrateShortcutBindings(saved, 6)).toEqual({
+      overrides: { ...saved.overrides, "global.seekForwardFine": { key: "" } },
+    });
+  });
+
+  it("regression: on macOS leaves fine seek unbound when a saved Option binding was stored as its glyph", () => {
+    const saved = { overrides: { "global.togglePlaybackSpeed": { key: "\u00af", shift: true, alt: true } } };
+
+    expect(migrateShortcutBindings(saved, 6)).toEqual(
+      isMac ? { overrides: { ...saved.overrides, "global.seekBackwardFine": { key: "" } } } : saved,
+    );
+  });
+
   it("regression: keeps a Shift binding from another layout, such as German Shift+7 for /", () => {
     const saved = { overrides: { "global.settings": { key: "/", shift: true } } };
 
