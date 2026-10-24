@@ -26,8 +26,6 @@ interface GenerationOptions {
   force?: boolean;
   source?: string;
   transliteration?: boolean;
-  // Filling tracks on entry follows the lyrics, so it joins the step that changed them instead of clearing redo.
-  joinCurrentStep?: boolean;
 }
 
 // -- Constants ----------------------------------------------------------------
@@ -52,7 +50,6 @@ const LanguagesPanel: React.FC = () => {
     kind: "transliteration" | "translation";
     language: string;
   } | null>(null);
-  const generatedOnEntry = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const sourceLanguage = metadata.language || "auto";
   const generate = useCallback(
@@ -61,7 +58,6 @@ const LanguagesPanel: React.FC = () => {
         force = false,
         source: requestedSource = sourceLanguage,
         transliteration: includeTransliteration = true,
-        joinCurrentStep = false,
       } = options;
       const startingState = useProjectStore.getState();
       if (startingState.lines.length === 0 || abortRef.current) return;
@@ -95,8 +91,7 @@ const LanguagesPanel: React.FC = () => {
           { force, transliteration: generation.transliteration, translations: generation.translations },
           edits,
         );
-        if (updates.length > 0 && joinCurrentStep) currentState.applyLineUpdatesToCurrentStep(updates);
-        else if (updates.length > 0) updateLinesWithHistory(updates, { deriveText: false, propagateToSiblings: false });
+        if (updates.length > 0) updateLinesWithHistory(updates, { deriveText: false, propagateToSiblings: false });
         const detected = generation.detectedLanguage;
         if (updates.length > 0 && !currentState.metadata.language && detected && detected !== "auto") {
           setMetadata({ language: detected });
@@ -119,18 +114,12 @@ const LanguagesPanel: React.FC = () => {
   // biome-ignore lint/correctness/useExhaustiveDependencies: Tab and project changes must cancel the previous generation lifecycle.
   useEffect(
     () => () => {
-      generatedOnEntry.current = false;
       abortRef.current?.abort();
       abortRef.current = null;
       setIsGenerating(false);
     },
     [activeTab, project],
   );
-  useEffect(() => {
-    if (activeTab !== "languages" || generatedOnEntry.current || lines.length === 0) return;
-    generatedOnEntry.current = true;
-    void generate(targets, { joinCurrentStep: true });
-  }, [activeTab, generate, lines.length, targets]);
   useLanguagesHistoryShortcuts(activeTab === "languages");
   const languageName = useMemo(() => new Map<string, string>(LANGUAGE_OPTIONS), []);
   const availableLanguages = LANGUAGE_OPTIONS.filter(([code]) => !targets.includes(code));
@@ -150,6 +139,9 @@ const LanguagesPanel: React.FC = () => {
     void generate([language]);
   };
   const trackCount = targets.length + 1;
+  const hasLanguageContent = lines.some(
+    (line) => line.transliteration !== undefined || Object.keys(line.translations ?? {}).length > 0,
+  );
   const sourceLanguageLabel =
     SOURCE_SELECT_OPTIONS.find((option) => option.value === (metadata.language ?? ""))?.label ?? metadata.language;
   const changeSourceLanguage = (language: string) => {
@@ -222,6 +214,7 @@ const LanguagesPanel: React.FC = () => {
           />
           <RegenerateLanguageControl
             isGenerating={isGenerating}
+            hasGenerated={hasLanguageContent}
             translations={targets}
             languageNames={languageName}
             onRegenerateAll={() => void generate(targets, { force: true })}
