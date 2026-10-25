@@ -108,7 +108,8 @@ const TimelineExtras: React.FC = () => (
         </li>
         <li>
           <strong>Snap</strong> (<InlineKeyBadge keys={getEffectiveKeysArray("timeline.toggleSnap")} />
-          ): a magnet for word edges and the playhead. Hold {MOD_KEY} mid-drag to bypass.
+          ): a magnet for word edges and the playhead. The arrow beside it picks what snaps. Hold {MOD_KEY} mid-drag to
+          bypass.
         </li>
         <li>
           <strong>Marker</strong> (<InlineKeyBadge keys={getEffectiveKeysArray("timeline.toggleMarkerMode")} />
@@ -128,6 +129,46 @@ const TimelineExtras: React.FC = () => (
         Snap remembers its state across reloads. Follow, Rolling and Preview start each session from their defaults in{" "}
         <SettingLink section="timeline" />.
       </p>
+    </HelpTopic>
+
+    <HelpTopic title="Beat grid">
+      <p className={PROSE}>
+        The beat grid reads the song's tempo in BPM and draws its bars and beats behind the waveform, so words can snap
+        to the beat. Open it from the wave icon at the left of the waveform.
+      </p>
+      <ul className={`${PROSE} list-disc pl-[18px] marker:text-(--muted) space-y-1`}>
+        <li>
+          <strong>Detect beats</strong> runs on your device. The first run downloads a 9 MB model. After that it takes a
+          few seconds and works offline.
+        </li>
+        <li>
+          <strong>Set by hand</strong> to type a tempo, or press{" "}
+          <InlineKeyBadge keys={getEffectiveKeysArray("global.playPause")} /> to play and tap along with{" "}
+          <InlineKeyBadge keys={getEffectiveKeysArray("sync.tap")} />. Bars start on your first tap, or at the playhead
+          if you typed the tempo.
+        </li>
+        <li>
+          <strong>Lines</strong> sets the finest lines: bars, beats, or halves, thirds or quarters of a beat. Finer
+          lines show up as you zoom in, and only lines you can see are snap targets.
+        </li>
+        <li>
+          Grid a little early or late? Nudge it with <strong>Offset</strong>. Bars starting on the wrong beat? Put the
+          playhead on the first beat of a bar and choose <strong>Set at playhead</strong> next to Downbeat.{" "}
+          <strong>Half</strong> and <strong>Double</strong> fix a tempo read at twice or half the speed.
+        </li>
+        <li>
+          Press <InlineKeyBadge keys={getEffectiveKeysArray("timeline.jumpPrevBar")} /> or{" "}
+          <InlineKeyBadge keys={getEffectiveKeysArray("timeline.jumpNextBar")} /> to jump the playhead to the bar before
+          or after it. <InlineKeyBadge keys={getEffectiveKeysArray("timeline.jumpPrevGridLine")} /> and{" "}
+          <InlineKeyBadge keys={getEffectiveKeysArray("timeline.jumpNextGridLine")} /> step through the lines you can
+          see instead, so zoom in to move by beats or parts of a beat.
+        </li>
+        <li>Every change can be undone, and the grid saves with the project.</li>
+        <li>
+          Press <InlineKeyBadge keys={getEffectiveKeysArray("timeline.toggleBeatGrid")} /> to show or hide the grid. The
+          arrow next to the magnet picks what snaps: words and lines, markers, vocal onsets and beats.
+        </li>
+      </ul>
     </HelpTopic>
 
     <HelpTopic title="Other features">

@@ -26,6 +26,7 @@ interface TooltipProps {
   children: React.ReactElement<{ "aria-describedby"?: string }>;
   placement?: Placement;
   delay?: number;
+  disabled?: boolean;
 }
 
 // -- Constants ----------------------------------------------------------------
@@ -39,18 +40,26 @@ const ARROW_OVERLAP_STYLE = { transform: "translateY(-1px)" };
 
 // -- Component ----------------------------------------------------------------
 
-const Tooltip: React.FC<TooltipProps> = ({ content, children, placement = "top", delay = SHOW_DELAY }) => {
+const Tooltip: React.FC<TooltipProps> = ({
+  content,
+  children,
+  placement = "top",
+  delay = SHOW_DELAY,
+  disabled = false,
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [opensWarm, setOpensWarm] = useState(false);
   const arrowRef = useRef(null);
   const isOpenRef = useRef(false);
+  if (disabled && isOpen) setIsOpen(false);
 
   const { refs, floatingStyles, context } = useFloating({
     open: isOpen,
     onOpenChange: (open) => {
-      if (open) setOpensWarm(group.isInstantPhase || group.currentId != null);
-      isOpenRef.current = open;
-      setIsOpen(open);
+      const opens = open && !disabled;
+      if (opens) setOpensWarm(group.isInstantPhase || group.currentId != null);
+      isOpenRef.current = opens;
+      setIsOpen(opens);
     },
     placement,
     middleware: [offset(6), flip(), shift({ padding: 8 }), arrow({ element: arrowRef })],

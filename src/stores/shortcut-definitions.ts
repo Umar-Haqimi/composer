@@ -485,6 +485,12 @@ const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     defaultBinding: { key: "t" },
   },
   {
+    id: "timeline.toggleBeatGrid",
+    scope: "timeline",
+    description: "Show or hide the beat grid",
+    defaultBinding: { key: "b" },
+  },
+  {
     id: "timeline.toggleRollingEdit",
     scope: "timeline",
     description: "Toggle rolling edit tool",
@@ -528,6 +534,34 @@ const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     scope: "timeline",
     description: "Jump to next snap point or onset",
     defaultBinding: { key: "ArrowRight", shift: true, alt: true },
+    repeatable: true,
+  },
+  {
+    id: "timeline.jumpPrevBar",
+    scope: "timeline",
+    description: "Jump to previous bar",
+    defaultBinding: { key: "ArrowLeft", shift: true, mod: true },
+    repeatable: true,
+  },
+  {
+    id: "timeline.jumpNextBar",
+    scope: "timeline",
+    description: "Jump to next bar",
+    defaultBinding: { key: "ArrowRight", shift: true, mod: true },
+    repeatable: true,
+  },
+  {
+    id: "timeline.jumpPrevGridLine",
+    scope: "timeline",
+    description: "Jump to previous beat grid line",
+    defaultBinding: { key: "ArrowLeft", shift: true, mod: true, alt: true },
+    repeatable: true,
+  },
+  {
+    id: "timeline.jumpNextGridLine",
+    scope: "timeline",
+    description: "Jump to next beat grid line",
+    defaultBinding: { key: "ArrowRight", shift: true, mod: true, alt: true },
     repeatable: true,
   },
   {

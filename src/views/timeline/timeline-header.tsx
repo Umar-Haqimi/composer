@@ -11,9 +11,8 @@ import { InlineKeyBadge } from "@/ui/inline-key-badge";
 import { ShortcutTip } from "@/ui/shortcut-tip";
 import { ShortcutToggleButton } from "@/ui/shortcut-toggle-button";
 import { Tooltip, TooltipGroup } from "@/ui/tooltip";
-import { cn } from "@/utils/cn";
-import { MOD_KEY } from "@/utils/platform";
 import { convertLineToWord, splitIntoWordsWithMeta } from "@/utils/sync-helpers";
+import { SnapLatch } from "@/views/timeline/snap-latch";
 import { TimelineZoomControls } from "@/views/timeline/timeline-header-controls";
 import { TimelineNotices } from "@/views/timeline/timeline-notices";
 import { useTimelineStore } from "@/views/timeline/timeline-store";
@@ -25,7 +24,6 @@ import {
   IconFocusCentered,
   IconLanguage,
   IconLayoutDistributeHorizontal,
-  IconMagnet,
   IconMapPin,
   IconTextPlus,
 } from "@tabler/icons-react";
@@ -46,9 +44,6 @@ const TimelineHeader: React.FC<TimelineHeaderProps> = ({ onImportLyrics, scrollC
   const markerMode = useTimelineStore((s) => s.markerMode);
   const toggleMarkerMode = useTimelineStore((s) => s.toggleMarkerMode);
   const showHints = useSettingsStore((s) => s.showShortcutHints);
-  const snapEnabled = useSettingsStore((s) => s.timelineSnap);
-  const setSetting = useSettingsStore((s) => s.set);
-  const isBypassing = useTimelineStore((s) => s.isBypassing);
   const lines = useProjectStore((s) => s.lines);
   const collapsedInstances = useTimelineStore((s) => s.collapsedInstances);
   const setInstanceCollapsed = useTimelineStore((s) => s.setInstanceCollapsed);
@@ -182,17 +177,7 @@ const TimelineHeader: React.FC<TimelineHeaderProps> = ({ onImportLyrics, scrollC
           </div>
 
           <div className="tray">
-            <ShortcutToggleButton
-              active={snapEnabled}
-              label="Snap"
-              shortcut="timeline.toggleSnap"
-              onClick={() => setSetting("timelineSnap", !snapEnabled)}
-              className={cn(isBypassing && "opacity-50")}
-              description={`Hold ${MOD_KEY} to bypass`}
-              iconOnly
-            >
-              <IconMagnet />
-            </ShortcutToggleButton>
+            <SnapLatch />
             <ShortcutToggleButton
               active={markerMode}
               label="Marker"
