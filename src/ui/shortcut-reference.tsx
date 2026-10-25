@@ -108,6 +108,8 @@ const SHORTCUT_SECTIONS: ShortcutSectionProps[] = [
       { keys: ["R"], description: "Toggle rolling edit", shortcutId: "timeline.toggleRollingEdit" },
       { keys: ["T"], description: "Toggle snap (magnet)", shortcutId: "timeline.toggleSnap" },
       { keys: ["B"], description: "Show or hide the beat grid", shortcutId: "timeline.toggleBeatGrid" },
+      { keys: ["V"], description: "Show spectrum", shortcutId: "timeline.toggleSpectrum" },
+      { keys: ["K"], description: "Pitch line", shortcutId: "timeline.togglePitchLine" },
       { keys: ["N"], description: "Insert line below selected word", shortcutId: "timeline.insertLineBelow" },
       { keys: ["Shift", "N"], description: "Insert line above selected word", shortcutId: "timeline.insertLineAbove" },
       { keys: ["X"], description: "Expand all lines", shortcutId: "timeline.expandAll" },

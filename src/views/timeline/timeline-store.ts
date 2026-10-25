@@ -1,10 +1,11 @@
 import type { ResumePosition } from "@/domain/project/resume-position";
 import type { LoopRegion } from "@/domain/selection/loop-region";
-import type { Bounds } from "@/domain/word/bounds";
 import type { WordSelection } from "@/domain/selection/model";
 import { toggleWordSelection } from "@/domain/selection/set-ops";
+import type { Bounds } from "@/domain/word/bounds";
 import { useSettingsStore } from "@/stores/settings";
 import type { GroupFocus } from "@/views/timeline/group-focus";
+import type { LoupeTarget } from "@/views/timeline/loupe/loupe-target";
 import type { ClipboardData, PasteMode } from "@/views/timeline/selection-types";
 import { create } from "zustand";
 
@@ -63,6 +64,7 @@ interface TimelineState {
   contextMenu: ContextMenuState | null;
   editingWord: EditingWord | null;
   rollingEditMode: boolean;
+  spectrumVisible: boolean;
   markerMode: boolean;
   hoveredSnapPointId: string | null;
   collapsedInstances: Record<string, boolean>;
@@ -78,6 +80,8 @@ interface TimelineState {
   vocalOnsetSnapPoints: number[];
   vocalOnsetDetectionStatus: "idle" | "processing" | "error";
   vocalOnsetDetectionError: string | null;
+  pitchTrackGeneration: number;
+  loupeTarget: LoupeTarget | null;
 }
 
 interface TimelineActions {
@@ -108,6 +112,7 @@ interface TimelineActions {
   clearEditingWord: () => void;
   resetProjectScope: () => void;
   toggleRollingEditMode: () => void;
+  toggleSpectrum: () => void;
   toggleMarkerMode: () => void;
   setHoveredSnapPointId: (id: string | null) => void;
   setInstanceCollapsed: (key: string, isCollapsed: boolean) => void;
@@ -123,6 +128,8 @@ interface TimelineActions {
   setSnappedAnchorTime: (t: number | null) => void;
   setVocalOnsetSnapPoints: (points: number[]) => void;
   setVocalOnsetDetectionStatus: (status: "idle" | "processing" | "error", error?: string | null) => void;
+  setPitchTrackGeneration: (generation: number) => void;
+  setLoupeTarget: (target: LoupeTarget | null) => void;
 }
 
 // -- Constants -----------------------------------------------------------------
@@ -161,6 +168,7 @@ const useTimelineStore = create<TimelineState & TimelineActions>((set, get) => {
     contextMenu: null,
     editingWord: null,
     rollingEditMode: settings.defaultRollingEdit,
+    spectrumVisible: settings.showSpectrum,
     markerMode: false,
     hoveredSnapPointId: null,
     collapsedInstances: {},
@@ -176,6 +184,8 @@ const useTimelineStore = create<TimelineState & TimelineActions>((set, get) => {
     vocalOnsetSnapPoints: [],
     vocalOnsetDetectionStatus: "idle",
     vocalOnsetDetectionError: null,
+    pitchTrackGeneration: 0,
+    loupeTarget: null,
 
     setZoom: (zoom) => set({ zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom)) }),
     zoomIn: () => set((s) => ({ zoom: Math.min(MAX_ZOOM, s.zoom + ZOOM_STEP) })),
@@ -227,6 +237,7 @@ const useTimelineStore = create<TimelineState & TimelineActions>((set, get) => {
         focusedGroup: null,
       }),
     toggleRollingEditMode: () => set((s) => ({ rollingEditMode: !s.rollingEditMode })),
+    toggleSpectrum: () => set((s) => ({ spectrumVisible: !s.spectrumVisible })),
     toggleMarkerMode: () => set((s) => ({ markerMode: !s.markerMode })),
     setHoveredSnapPointId: (hoveredSnapPointId) => set({ hoveredSnapPointId }),
     setInstanceCollapsed: (key, isCollapsed) =>
@@ -255,6 +266,8 @@ const useTimelineStore = create<TimelineState & TimelineActions>((set, get) => {
       }),
     setVocalOnsetDetectionStatus: (vocalOnsetDetectionStatus, error = null) =>
       set({ vocalOnsetDetectionStatus, vocalOnsetDetectionError: error }),
+    setPitchTrackGeneration: (pitchTrackGeneration) => set({ pitchTrackGeneration }),
+    setLoupeTarget: (loupeTarget) => set({ loupeTarget }),
   };
 });
 

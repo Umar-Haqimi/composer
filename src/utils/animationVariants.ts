@@ -124,6 +124,50 @@ const floatingEntrance = {
   reducedInitial: { opacity: 0 },
 } as const;
 
+// -- Pitch Line ---------------------------------------------------------------
+
+// Canvas layers in the Timeline rows animate through the Web Animations API, so these are plain numbers.
+const pitchLineMotion = {
+  spillFadeMs: 150,
+  wipeMs: 560,
+  wipeEase: [0.45, 0, 0.25, 1],
+  rowLeadMs: 60,
+  rowStaggerMs: 80,
+  riseMs: 240,
+  labelLeadPx: 6,
+  reducedFadeMs: 150,
+  fadeEase: "ease-out",
+} as const;
+
+const pitchLineKeyframes: Record<"wipe" | "reducedWipe" | "fadeOut", Keyframe[]> = {
+  wipe: [{ clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)" }],
+  reducedWipe: [{ opacity: 0 }, { opacity: 1 }],
+  fadeOut: [{ opacity: 1 }, { opacity: 0 }],
+};
+
+// -- Edit Loupe ---------------------------------------------------------------
+
+const loupeEnterTransition: Transition = { type: "spring", duration: 0.18, bounce: 0 };
+const loupeExitTransition: Transition = { type: "spring", duration: 0.12, bounce: 0 };
+
+const loupeVariants: Variants = {
+  hidden: { opacity: 0, scale: 0.96, filter: "blur(4px)" },
+  visible: { opacity: 1, scale: 1, filter: "blur(0px)", transition: loupeEnterTransition },
+  exit: { opacity: 0, scale: 0.96, filter: "blur(4px)", transition: loupeExitTransition },
+};
+
+const loupeReducedVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: loupeEnterTransition },
+  exit: { opacity: 0, transition: loupeExitTransition },
+};
+
+// Keyframes need a tween; a spring cannot run a three-step scale.
+const loupeDeltaPopVariants: Variants = {
+  rest: { scale: 1 },
+  pop: { scale: [1, 1.12, 1], transition: { duration: 0.16, ease: "easeOut" } },
+};
+
 // -- Stagger Container --------------------------------------------------------
 
 // -- Exports ------------------------------------------------------------------
@@ -140,7 +184,12 @@ export {
   pinDropInVariants,
   snapFlashVariants,
   floatingEntrance,
+  loupeDeltaPopVariants,
+  loupeReducedVariants,
+  loupeVariants,
   inlineIconTransition,
   inlineIconVariants,
   inlineIconReducedVariants,
+  pitchLineKeyframes,
+  pitchLineMotion,
 };

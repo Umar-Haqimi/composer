@@ -1,10 +1,10 @@
 import { withNewInstance } from "@/domain/group/own-timing";
-import { hasTransliteration } from "@/domain/language/has-transliteration";
 import { timeRangeResolver, wholeSongRange } from "@/domain/group/shared-timing";
 import { pickedTemplateSource } from "@/domain/group/template-source";
 import { instanceBounds } from "@/domain/instance/bounds";
 import { instanceCount, linesOfInstance } from "@/domain/instance/enumerate";
 import { isLinked } from "@/domain/instance/predicates";
+import { hasTransliteration } from "@/domain/language/has-transliteration";
 import { manualBackgroundWordEdit } from "@/domain/line/background";
 import { effectiveBounds } from "@/domain/line/bounds";
 import type { ReadableLine } from "@/domain/line/effective-words";
@@ -31,20 +31,23 @@ import { copyInstanceToClipboardAndPreview } from "@/views/timeline/copy-instanc
 import { decideAddInstancePlacement } from "@/views/timeline/decide-add-instance-placement";
 import { deleteGroupWithConfirm } from "@/views/timeline/delete-group-with-confirm";
 import { deleteSelectedWords } from "@/views/timeline/delete-selected-words";
-import { NO_BEAT_GRID_MESSAGE, jumpToAdjacentBar, jumpToAdjacentGridLine } from "@/views/timeline/jump-to-bar";
 import { currentEffectiveFocus, scrollToFocusStart } from "@/views/timeline/effective-focus";
 import { resolveExplicitSelectionToggle } from "@/views/timeline/explicit-selection-toggle";
 import { isInFocus } from "@/views/timeline/group-focus";
 import { GROUP_HEADER_HEIGHT } from "@/views/timeline/group-header-row";
 import { createGroupFromSelection, fillSelectionGaps, instanceToTemplate } from "@/views/timeline/group-ops";
 import { insertEmptyLine } from "@/views/timeline/insert-empty-line";
+import { NO_BEAT_GRID_MESSAGE, jumpToAdjacentBar, jumpToAdjacentGridLine } from "@/views/timeline/jump-to-bar";
 import { jumpToAdjacentInstance } from "@/views/timeline/jump-to-instance";
+import { showLoupeAfterKeyEdit, storedEdgeTime } from "@/views/timeline/loupe/loupe-target";
+import { currentOverviewBandHeight } from "@/views/timeline/overview-band-height";
 import { pingGroup } from "@/views/timeline/ping-group";
+import { togglePitchLine } from "@/views/timeline/pitch/pitch-line-toggle";
 import { scrollToInstanceHeader } from "@/views/timeline/scroll-helpers";
 import { clearLoopRegion, playSelection } from "@/views/timeline/selection-playback";
 import { adjacentSnapPoint } from "@/views/timeline/snap-marker-math";
 import { splitLinesIntoWords } from "@/views/timeline/split-lines-into-words";
-import { GUTTER_WIDTH, WAVEFORM_HEIGHT, useTimelineStore } from "@/views/timeline/timeline-store";
+import { GUTTER_WIDTH, useTimelineStore } from "@/views/timeline/timeline-store";
 import { useTimelineClipboard } from "@/views/timeline/use-timeline-clipboard";
 import { computeRowLayout, partitionNudgeSelections, shiftSelectionsTogether } from "@/views/timeline/utils";
 import { findBoundaryTarget, findWordsAtTime, pickNextWordAtPlayhead } from "@/views/timeline/word-at-playhead";
@@ -119,7 +122,7 @@ function useTimelineKeyboard(
           defaultRowHeight,
           collapsedInstances,
           focusedGroup,
-          waveformHeight: WAVEFORM_HEIGHT,
+          waveformHeight: currentOverviewBandHeight(),
           groupHeaderHeight: GROUP_HEADER_HEIGHT,
         });
         const pos = layout.lineTops.get(line.id);
@@ -130,7 +133,7 @@ function useTimelineKeyboard(
           const isRowVisible = pos.top >= visibleTop && rowBottom <= visibleBottom;
 
           if (!isRowVisible) {
-            scrollContainer.scrollTo({ top: pos.top - WAVEFORM_HEIGHT, behavior: "instant" });
+            scrollContainer.scrollTo({ top: pos.top - currentOverviewBandHeight(), behavior: "instant" });
           }
         }
 
@@ -168,6 +171,7 @@ function useTimelineKeyboard(
         syllablesFollowRolling: useSettingsStore.getState().syllablesFollowRolling,
         updateLineWithHistory: useProjectStore.getState().updateLineWithHistory,
       });
+      showLoupeAfterKeyEdit({ lineId: line.id, wordIndex, type: targetWord.type }, edge, word[edge]);
     },
     [lines, duration, scrollContainerRef],
   );
@@ -282,7 +286,7 @@ function useTimelineKeyboard(
               defaultRowHeight,
               collapsedInstances,
               focusedGroup,
-              waveformHeight: WAVEFORM_HEIGHT,
+              waveformHeight: currentOverviewBandHeight(),
               groupHeaderHeight: GROUP_HEADER_HEIGHT,
             });
             const instanceKey = isLinked(line) ? `${line.groupId}:${line.instanceIdx}` : null;
@@ -350,6 +354,12 @@ function useTimelineKeyboard(
           s.set("beatGridVisible", !s.beatGridVisible);
           break;
         }
+        case "timeline.toggleSpectrum":
+          useTimelineStore.getState().toggleSpectrum();
+          break;
+        case "timeline.togglePitchLine":
+          togglePitchLine();
+          break;
         case "timeline.toggleRollingEdit":
           useTimelineStore.getState().toggleRollingEditMode();
           break;
@@ -652,6 +662,7 @@ function useTimelineKeyboard(
             if (Math.abs(unshared.appliedDelta) > Math.abs(result.appliedDelta)) showSharedSongEdgeToast();
           }
           if (result.updates.length === 0) break;
+          const nudgedFrom = storedEdgeTime(nudgeSel[0], "begin");
           if (result.updates.length === 1) {
             useProjectStore.getState().updateLineWithHistory(result.updates[0].id, result.updates[0].updates, {
               propagateToSiblings: false,
@@ -659,6 +670,7 @@ function useTimelineKeyboard(
           } else {
             useProjectStore.getState().updateLinesWithHistory(result.updates, { propagateToSiblings: false });
           }
+          if (nudgedFrom !== null) showLoupeAfterKeyEdit(nudgeSel[0], "begin", nudgedFrom);
           break;
         }
         case "timeline.jumpToInstanceStart": {
