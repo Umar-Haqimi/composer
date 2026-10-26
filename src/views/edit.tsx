@@ -1,11 +1,13 @@
 import type { LinkGroup } from "@/domain/group/template";
 import { instanceCount, instanceOrdinal } from "@/domain/instance/enumerate";
+import { lineIdsActiveAt } from "@/domain/line/active-at-time";
 import { backgroundFields } from "@/domain/line/background";
 import type { LyricLine } from "@/domain/line/model";
 import { LYRICS_FORMATS_PROSE } from "@/domain/lyrics-file/supported-formats";
 import { remapWordTextsPreservingTiming } from "@/domain/word/remap-text";
 import type { WordTiming } from "@/domain/word/timing";
 import { useDualClickImport } from "@/hooks/useDualClickImport";
+import { useAudioStore } from "@/stores/audio";
 import { useConfirm } from "@/stores/confirm-store";
 import { isAnyModalOpen } from "@/stores/escape-layer-stack";
 import { useImportModal, useImportModalStore, useLastImportResult } from "@/stores/import-modal-store";
@@ -14,6 +16,7 @@ import { useSettingsStore } from "@/stores/settings";
 import { historyShortcutAction } from "@/utils/history-shortcut";
 import { Button } from "@/ui/button";
 import { Scroll } from "@/ui/scroll";
+import { cn } from "@/utils/cn";
 import { extractBackgroundVocals, extractInlineFromLine } from "@/utils/background-vocal-extraction";
 import { pluralWord, pluralize } from "@/utils/pluralize";
 import { AgentManager } from "@/views/edit/agent-manager";
@@ -26,13 +29,15 @@ import { LinePreview, PreviewGroupHeader } from "@/views/edit/line-preview";
 import { parseLyrics } from "@/views/edit/parse-lyrics";
 import { useComposedTextareaChange, useEditTextCaret } from "@/views/edit/use-edit-text-caret";
 import { useFocusLyricsShortcut } from "@/views/edit/use-focus-lyrics-shortcut";
+import { useRubberBandSelect } from "@/views/edit/use-rubber-band-select";
+import { useScrollSync } from "@/views/edit/use-scroll-sync";
 import { useSmartPaste } from "@/views/edit/use-smart-paste";
 import { PreviewSelectionBar } from "@/views/edit/preview-selection-bar";
 import { PROJECT_FILE_PROSE } from "@/views/lyrics-import-modal/accepted-files";
 import { useImportContext } from "@/views/lyrics-import-modal/import-lyrics";
 import { importLyricsFile } from "@/views/lyrics-import-modal/import-lyrics-source";
 import { IconFileImport, IconMicrophone } from "@tabler/icons-react";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 // -- Constants ----------------------------------------------------------------
 
@@ -70,6 +75,8 @@ const EditPanel: React.FC = () => {
   const runBaselineRef = useRef<{ lines: LyricLine[]; wasDirty: boolean } | null>(null);
   const debounceRef = useRef<number | null>(null);
   const [selectedLines, setSelectedLines] = useState<Set<number>>(new Set());
+  const selectedLinesRef = useRef(selectedLines);
+  selectedLinesRef.current = selectedLines;
   const [isTypingLyrics, setIsTypingLyrics] = useState(false);
   const lastSelectedLineRef = useRef<number | null>(null);
   const dragAnchorRef = useRef<number | null>(null);
@@ -87,6 +94,16 @@ const EditPanel: React.FC = () => {
   const defaultAgentId = agents?.[0]?.id ?? "v1";
   const parsed = useMemo(() => parseLyrics(rawText, lines, defaultAgentId), [rawText, lines, defaultAgentId]);
   const nonEmptyCount = useMemo(() => parsed.filter((p) => !p.isEmpty).length, [parsed]);
+  // Joined into a string so the selector result stays equal between audio ticks inside one line.
+  const playingLineIdsKey = useAudioStore((s) => lineIdsActiveAt(lines, s.currentTime).join("\n"));
+  const playingLineIds = useMemo(
+    () => new Set(playingLineIdsKey ? playingLineIdsKey.split("\n") : []),
+    [playingLineIdsKey],
+  );
+  const playingLineNumbers = useMemo(
+    () => parsed.flatMap((p) => (p.lineId && playingLineIds.has(p.lineId) ? [p.lineNumber] : [])),
+    [parsed, playingLineIds],
+  );
   const instanceCountByGroup = useMemo(
     () => new Map(groups.map((g) => [g.id, instanceCount(lines, g.id)])),
     [groups, lines],
@@ -203,6 +220,33 @@ const EditPanel: React.FC = () => {
     setSelectedLines(next);
     lastSelectedLineRef.current = lineNumber;
   }, []);
+
+  const rubberBand = useRubberBandSelect({
+    getSelection: useCallback(() => selectedLinesRef.current, []),
+    onSelect: useCallback((next: Set<number>, focusLine: number | null) => {
+      setSelectedLines(next);
+      if (focusLine !== null) lastSelectedLineRef.current = focusLine;
+    }, []),
+  });
+
+  const { textareaAnchors, handleTextareaScroll, handlePreviewScroll } = useScrollSync(
+    textareaRef,
+    rubberBand.viewportRef,
+    rawText,
+  );
+  const playingBandsRef = useRef<HTMLDivElement>(null);
+  const alignPlayingBands = useCallback(() => {
+    const bands = playingBandsRef.current;
+    const textarea = textareaRef.current;
+    if (bands && textarea) bands.style.transform = `translateY(${-textarea.scrollTop}px)`;
+  }, [textareaRef]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the bands remount when the playing line or layout changes and must pick up the current scroll offset.
+  useLayoutEffect(() => alignPlayingBands(), [alignPlayingBands, playingLineNumbers, textareaAnchors]);
+
+  const handleTextareaScrollEvent = useCallback(() => {
+    alignPlayingBands();
+    handleTextareaScroll();
+  }, [alignPlayingBands, handleTextareaScroll]);
 
   const handleBulkAgentChange = useCallback(
     (agentId: string) => {
@@ -439,21 +483,42 @@ const EditPanel: React.FC = () => {
             >
               Paste or type lyrics
             </label>
-            {/* react-doctor-disable-next-line react-doctor/control-has-associated-label */}
-            <textarea
-              id={textareaId}
-              ref={textareaRef}
-              value={rawText}
-              onChange={textareaChange.onChange}
-              onFocus={() => setIsTypingLyrics(true)}
-              onBlur={handleTextareaBlur}
-              onCompositionStart={textareaChange.onCompositionStart}
-              onCompositionEnd={textareaChange.onCompositionEnd}
-              onPaste={handlePaste}
-              placeholder={LYRICS_TEXTAREA_PLACEHOLDER}
-              className="flex-1 py-2 px-3.5 text-sm font-medium leading-7 border rounded-xl resize-none bg-(--well) border-(--edge) caret-composer-accent focus:outline-none focus:border-(--lit-ring) placeholder:text-(--muted)"
-              spellCheck={false}
-            />
+            <div className="relative flex flex-1 min-h-0">
+              {/* react-doctor-disable-next-line react-doctor/control-has-associated-label */}
+              <textarea
+                id={textareaId}
+                ref={textareaRef}
+                value={rawText}
+                onScroll={handleTextareaScrollEvent}
+                onChange={textareaChange.onChange}
+                onFocus={() => setIsTypingLyrics(true)}
+                onBlur={handleTextareaBlur}
+                onCompositionStart={textareaChange.onCompositionStart}
+                onCompositionEnd={textareaChange.onCompositionEnd}
+                onPaste={handlePaste}
+                placeholder={LYRICS_TEXTAREA_PLACEHOLDER}
+                className="flex-1 py-2 px-3.5 text-sm font-medium leading-7 border rounded-xl resize-none bg-(--well) border-(--edge) caret-composer-accent focus:outline-none focus:border-(--lit-ring) placeholder:text-(--muted)"
+                spellCheck={false}
+              />
+              {playingLineNumbers.length > 0 && (
+                <div className="absolute inset-px overflow-hidden rounded-[11px] pointer-events-none" aria-hidden>
+                  <div ref={playingBandsRef} data-testid="textarea-playing-bands">
+                    {playingLineNumbers.map((lineNumber) => {
+                      const top = textareaAnchors[lineNumber - 1];
+                      const bottom = textareaAnchors[lineNumber];
+                      if (top === undefined || bottom === undefined) return null;
+                      return (
+                        <div
+                          key={lineNumber}
+                          className="absolute inset-x-0 bg-composer-accent/10 shadow-[inset_2px_0_0_var(--color-composer-accent)]"
+                          style={{ top, height: bottom - top }}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Preview */}
@@ -463,57 +528,76 @@ const EditPanel: React.FC = () => {
               onAssignAgent={handleBulkAgentChange}
               onClear={handleClearSelection}
             />
-            <Scroll className="flex-1 border rounded-xl border-(--edge) bg-(--well)">
-              {parsed.length === 0 || (parsed.length === 1 && parsed[0].isEmpty) ? (
-                <div className="flex items-center justify-center h-full text-sm text-(--muted)">
-                  Lyrics will appear here
-                </div>
-              ) : (
-                <div>
-                  {parsed.map((line, index) => {
-                    const prev = index > 0 ? parsed[index - 1] : null;
-                    const isFirstOfInstance =
-                      line.groupId !== undefined &&
-                      line.instanceIdx !== undefined &&
-                      (prev?.groupId !== line.groupId || prev?.instanceIdx !== line.instanceIdx);
-                    const group = line.groupId ? groups.find((g) => g.id === line.groupId) : undefined;
-                    const totalInstances = group ? (instanceCountByGroup.get(group.id) ?? 0) : 0;
-                    const groupTooltip =
-                      group && totalInstances > 1
-                        ? `Part of ${group.label} · linked to ${pluralize(totalInstances - 1, "other instance")}. Edits propagate.`
-                        : undefined;
-                    return (
-                      <div key={line.lineNumber}>
-                        {isFirstOfInstance && group && line.instanceIdx !== undefined && (
-                          <PreviewGroupHeader
-                            label={group.label}
-                            ordinal={instanceOrdinal(lines, group.id, line.instanceIdx)}
-                            total={totalInstances}
-                            color={group.color}
+            {/* react-doctor-disable-next-line react-doctor/no-static-element-interactions -- mouse-only rubber-band selection; rows stay individually selectable */}
+            <div
+              ref={rubberBand.containerRef}
+              className={cn("relative flex flex-col flex-1 min-h-0", rubberBand.band && "select-none")}
+              onMouseDown={rubberBand.handleMouseDown}
+            >
+              <Scroll
+                className="flex-1 border rounded-xl border-(--edge) bg-(--well)"
+                viewportRef={rubberBand.viewportRef}
+                onScrollTopChange={handlePreviewScroll}
+              >
+                {parsed.length === 0 || (parsed.length === 1 && parsed[0].isEmpty) ? (
+                  <div className="flex items-center justify-center h-full text-sm text-(--muted)">
+                    Lyrics will appear here
+                  </div>
+                ) : (
+                  <div>
+                    {parsed.map((line, index) => {
+                      const prev = index > 0 ? parsed[index - 1] : null;
+                      const isFirstOfInstance =
+                        line.groupId !== undefined &&
+                        line.instanceIdx !== undefined &&
+                        (prev?.groupId !== line.groupId || prev?.instanceIdx !== line.instanceIdx);
+                      const group = line.groupId ? groups.find((g) => g.id === line.groupId) : undefined;
+                      const totalInstances = group ? (instanceCountByGroup.get(group.id) ?? 0) : 0;
+                      const groupTooltip =
+                        group && totalInstances > 1
+                          ? `Part of ${group.label} · linked to ${pluralize(totalInstances - 1, "other instance")}. Edits propagate.`
+                          : undefined;
+                      return (
+                        <div key={line.lineNumber}>
+                          {isFirstOfInstance && group && line.instanceIdx !== undefined && (
+                            <PreviewGroupHeader
+                              label={group.label}
+                              ordinal={instanceOrdinal(lines, group.id, line.instanceIdx)}
+                              total={totalInstances}
+                              color={group.color}
+                            />
+                          )}
+                          <LinePreview
+                            line={line}
+                            agents={agents}
+                            isSelected={selectedLines.has(line.lineNumber)}
+                            isPlaying={playingLineIds.has(line.lineId)}
+                            hasMultipleSelected={selectedLines.size > 1}
+                            groupColor={group?.color}
+                            groupTooltip={groupTooltip}
+                            onSelect={handleLineSelect}
+                            onAgentChange={handleAgentChange}
+                            onBulkAgentChange={handleBulkAgentChange}
+                            onBackgroundChange={handleBackgroundChange}
+                            onExtractLine={handleExtractLine}
+                            onGutterMouseDown={handleGutterMouseDown}
+                            onGutterMouseEnter={handleGutterMouseEnter}
+                            didDragRef={didDragRef}
                           />
-                        )}
-                        <LinePreview
-                          line={line}
-                          agents={agents}
-                          isSelected={selectedLines.has(line.lineNumber)}
-                          hasMultipleSelected={selectedLines.size > 1}
-                          groupColor={group?.color}
-                          groupTooltip={groupTooltip}
-                          onSelect={handleLineSelect}
-                          onAgentChange={handleAgentChange}
-                          onBulkAgentChange={handleBulkAgentChange}
-                          onBackgroundChange={handleBackgroundChange}
-                          onExtractLine={handleExtractLine}
-                          onGutterMouseDown={handleGutterMouseDown}
-                          onGutterMouseEnter={handleGutterMouseEnter}
-                          didDragRef={didDragRef}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </Scroll>
+              {rubberBand.band && (
+                <div
+                  data-testid="preview-rubber-band"
+                  className="absolute rounded-sm border border-composer-accent/60 bg-composer-accent/10 pointer-events-none"
+                  style={rubberBand.band}
+                />
               )}
-            </Scroll>
+            </div>
           </div>
         </div>
       </div>
