@@ -1,8 +1,9 @@
+import { applyLineUpdates } from "@/domain/line/apply-line-updates";
 import { mainBounds } from "@/domain/line/bounds";
 import type { LyricLine } from "@/domain/line/model";
 import { isBracketedLine } from "@/domain/line/predicates";
 import { isSyncableLine } from "@/domain/line/sync-progress";
-import { type GestureCommit, applyUpdates } from "@/domain/sync/commit-gesture";
+import type { GestureCommit } from "@/domain/sync/commit-gesture";
 import { type SyncCursor, prevSyncableLineIndex } from "@/domain/sync/cursor";
 
 // -- Types --------------------------------------------------------------------
@@ -54,7 +55,7 @@ function bracketRewindTime(
 ): number | null {
   const next = commit.nextCursor.lineIndex;
   if (next <= from.lineIndex || !isBracketedLine(lines[next])) return null;
-  const updated = applyUpdates(lines, commit.lineUpdates);
+  const updated = applyLineUpdates(lines, commit.lineUpdates);
   const begin = mainBegin(updated[bracketAnchorLineIndex(updated, next)]);
   return begin === undefined ? null : Math.max(0, begin - preroll);
 }

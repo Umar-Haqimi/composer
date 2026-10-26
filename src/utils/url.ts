@@ -1,5 +1,9 @@
 // -- Functions -----------------------------------------------------------------
 
+function stripTrailingSlashes(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
 function ensureHttpScheme(input: string): string {
   const trimmed = input.trim();
   if (trimmed.length === 0) return "";
@@ -19,10 +23,6 @@ function displayHostFromUrl(url: string): string {
   return url.replace(/^https?:\/\//i, "").replace(/\/$/, "");
 }
 
-function trimTrailingSlashes(url: string): string {
-  return url.replace(/\/+$/, "");
-}
-
 // -- Exports -------------------------------------------------------------------
 
-export { ensureHttpScheme, isValidHttpUrl, displayHostFromUrl, trimTrailingSlashes };
+export { stripTrailingSlashes, ensureHttpScheme, isValidHttpUrl, displayHostFromUrl };

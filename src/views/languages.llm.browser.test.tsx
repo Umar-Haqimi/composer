@@ -30,10 +30,17 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// Opening the tab never generates, so each test asks for it.
+async function renderAndGenerate(ui: React.ReactElement) {
+  const screen = await render(ui);
+  await screen.getByRole("button", { name: /^(Generate|Regenerate) all$/ }).click();
+  return screen;
+}
+
 describe("Languages translation provider", () => {
   it("sends one Google request per target with main and background together", async () => {
     const translate = mockGoogle();
-    const screen = await render(<LanguagesPanel />);
+    const screen = await renderAndGenerate(<LanguagesPanel />);
     await expect.element(screen.getByRole("textbox", { name: "English", exact: true })).toHaveValue("Google text");
     expect(translate).toHaveBeenCalledTimes(1);
     expect(translate.mock.calls[0][0]).toMatchObject({
@@ -68,7 +75,7 @@ describe("Languages translation provider", () => {
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
-    const screen = await render(<LanguagesPanel />);
+    const screen = await renderAndGenerate(<LanguagesPanel />);
     await expect.element(screen.getByRole("textbox", { name: "English", exact: true })).toHaveValue("LLM text");
     expect(googleLanguageProvider.translate).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalled();
@@ -80,7 +87,7 @@ describe("Languages translation provider", () => {
     useSettingsStore.getState().selectTranslationProvider(id);
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const screen = await render(<LanguagesPanel />);
+    const screen = await renderAndGenerate(<LanguagesPanel />);
     await expect.element(screen.getByText(/Choose a model for Local model/)).toBeInTheDocument();
     await expect.element(screen.getByRole("textbox", { name: "Transliteration", exact: true })).toHaveValue("romaji");
     expect(fetchMock).not.toHaveBeenCalled();
@@ -97,7 +104,7 @@ describe("Languages translation provider", () => {
         throw new TypeError("Failed to fetch");
       }),
     );
-    const screen = await render(
+    const screen = await renderAndGenerate(
       <>
         <Toaster />
         <LanguagesPanel />
@@ -123,7 +130,7 @@ describe("Languages translation provider", () => {
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
-    await render(<LanguagesPanel />);
+    await renderAndGenerate(<LanguagesPanel />);
     await expect.poll(() => fetchMock.mock.calls.length).toBeGreaterThan(0);
     const prompt = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).messages[1].content;
     expect(prompt).toContain(JSON.stringify({ "1": "line one", "3": "line two", "2b": "(bg one)" }, null, 2));

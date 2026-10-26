@@ -1,11 +1,9 @@
 import type { ProjectMetadata } from "@/domain/project/metadata";
 import type {
   TranslationContext,
-  TranslationLineResult,
   TranslationProvider,
   TranslationRequest,
   TranslationResponse,
-  TransliterationBatchResult,
 } from "@/services/language-provider";
 import { llmErrorMessage } from "@/services/llm/llm-error-message";
 import type { LlmProfile } from "@/services/llm/llm-profile";
@@ -77,21 +75,10 @@ function translationPairs(results: TargetResponse[]) {
   }));
 }
 
-function hasFailedLines(
-  romanization: Array<TransliterationBatchResult | undefined>,
-  results: TargetResponse[],
-): boolean {
-  const batches: TranslationLineResult[][] = [
-    ...romanization.map((batch) => batch?.lines ?? []),
-    ...results.flatMap(({ response }) => [response.main, response.background]),
-  ];
-  return batches.some((lines) => lines.some((line) => line.failed));
-}
-
 /** The one toast for a run: a request error wins over per-line failures. */
 function generationFailureMessage(error: unknown, profile: LlmProfile | undefined, failedLines: boolean) {
   if (error instanceof LlmRequestError && profile) return llmErrorMessage(error, profile);
   return error !== undefined || failedLines ? "Couldn't generate some lines. Try Regenerate." : undefined;
 }
 
-export { generationFailureMessage, hasFailedLines, runTranslations, translationContext, translationPairs };
+export { generationFailureMessage, runTranslations, translationContext, translationPairs };

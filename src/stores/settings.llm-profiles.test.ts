@@ -1,4 +1,6 @@
-import { DEFAULTS, GOOGLE_TRANSLATION_PROVIDER, migrateSettingsForTest, useSettingsStore } from "@/stores/settings";
+import { DEFAULTS, useSettingsStore } from "@/stores/settings";
+import { GOOGLE_TRANSLATION_PROVIDER } from "@/stores/settings-llm-profiles";
+import { migrateSettings } from "@/stores/settings-migration";
 import { describe, expect, it } from "vitest";
 
 describe("LLM profile settings", () => {
@@ -45,14 +47,14 @@ describe("LLM profile settings", () => {
 
   it("migration adds the defaults to an older blob", () => {
     const { llmProfiles: _p, translationProvider: _t, ...older } = DEFAULTS;
-    const migrated = migrateSettingsForTest(older, 6) as typeof DEFAULTS;
+    const migrated = migrateSettings(older, 6) as typeof DEFAULTS;
     expect(migrated.llmProfiles).toEqual([]);
     expect(migrated.translationProvider).toBe("google");
   });
 
   it("migration keeps existing profiles", () => {
     const blob = { ...DEFAULTS, llmProfiles: [{ id: "x" }], translationProvider: "x" };
-    const migrated = migrateSettingsForTest(blob, 7) as { translationProvider: string };
+    const migrated = migrateSettings(blob, 7) as { translationProvider: string };
     expect(migrated.translationProvider).toBe("x");
   });
 });

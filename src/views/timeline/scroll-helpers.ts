@@ -2,7 +2,8 @@ import { instanceBounds } from "@/domain/instance/bounds";
 import { linesOfInstance } from "@/domain/instance/enumerate";
 import { useProjectStore } from "@/stores/project";
 import { GROUP_HEADER_HEIGHT } from "@/views/timeline/group-header-row";
-import { GUTTER_WIDTH, useTimelineStore, WAVEFORM_HEIGHT } from "@/views/timeline/timeline-store";
+import { currentOverviewBandHeight } from "@/views/timeline/overview-band-height";
+import { GUTTER_WIDTH, useTimelineStore } from "@/views/timeline/timeline-store";
 import { computeRowLayout } from "@/views/timeline/utils";
 
 // -- Functions -----------------------------------------------------------------
@@ -10,14 +11,15 @@ import { computeRowLayout } from "@/views/timeline/utils";
 function scrollToInstanceHeader(groupId: string, instanceIdx: number): void {
   const container = document.querySelector<HTMLDivElement>("[data-scroll-container]");
   if (!container) return;
-  const { rowHeights, defaultRowHeight, collapsedInstances, zoom } = useTimelineStore.getState();
+  const { rowHeights, defaultRowHeight, collapsedInstances, focusedGroup, zoom } = useTimelineStore.getState();
   const projectLines = useProjectStore.getState().lines;
   const layout = computeRowLayout({
     lines: projectLines,
     rowHeights,
     defaultRowHeight,
     collapsedInstances,
-    waveformHeight: WAVEFORM_HEIGHT,
+    focusedGroup,
+    waveformHeight: currentOverviewBandHeight(),
     groupHeaderHeight: GROUP_HEADER_HEIGHT,
   });
   const target = layout.headerTops.get(`${groupId}:${instanceIdx}`);

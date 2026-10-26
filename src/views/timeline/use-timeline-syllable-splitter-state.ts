@@ -1,9 +1,8 @@
-import { reconcileTransliterationAfterSyllableSplit } from "@/domain/language/reconcile-syllable-split";
+import { splitWordsKeepingTransliteration } from "@/domain/language/reconcile-syllable-split";
 import { splitTransliterationAtBoundaries } from "@/domain/language/transliteration-format";
 import { manualBackgroundWordEdit } from "@/domain/line/background";
-import { effectiveTrackWords } from "@/domain/line/effective-words";
 import type { WordTiming } from "@/domain/word/timing";
-import { useAudioStore } from "@/stores/audio";
+import { livePlaybackTime } from "@/stores/audio";
 import { useConfirm } from "@/stores/confirm-store";
 import { useProjectStore } from "@/stores/project";
 import { buildApplyToAllConfirmOptions } from "@/utils/apply-to-all-confirm-options";
@@ -12,7 +11,6 @@ import { splitWordIntoSyllables } from "@/utils/single-word-syllable-split";
 import { handleWordChangeWithDivergenceCheck } from "@/utils/word-divergence-flow";
 import { splitWordIntoWords } from "@/utils/word-split";
 import { splitSourceWord } from "@/utils/word-timing";
-import { trackField } from "@/domain/line/tracks";
 import { nanoid } from "nanoid";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -92,8 +90,7 @@ function useTimelineSyllableSplitterState({
     if (mode === "word") {
       newWords = splitWordIntoWords(word, splitPoints);
     } else {
-      const audioEl = useAudioStore.getState().audioElement;
-      const currentTime = audioEl?.currentTime ?? useAudioStore.getState().currentTime;
+      const currentTime = livePlaybackTime();
       const playheadOnWord = currentTime > word.begin && currentTime < word.end;
 
       if (playheadOnWord && splitPoints.length === 1) {
@@ -136,21 +133,15 @@ function useTimelineSyllableSplitterState({
     const line = currentLines.find((l) => l.id === lineId);
     if (!line) return;
 
-    const wordsArray = effectiveTrackWords(line, type);
-    if (!wordsArray) return;
-
-    const updatedWords = [...wordsArray.slice(0, wordIndex), ...newWords, ...wordsArray.slice(wordIndex + 1)];
-    const transliteration =
-      mode === "syllable"
-        ? reconcileTransliterationAfterSyllableSplit(line, trackField(type), wordIndex, newWords)
-        : null;
-    const extraUpdates = transliteration ? { transliteration } : {};
+    const split = splitWordsKeepingTransliteration(line, type, wordIndex, newWords);
+    if (!split) return;
+    const extraUpdates = split.transliteration ? { transliteration: split.transliteration } : {};
 
     if (type === "word") {
-      void handleWordChangeWithDivergenceCheck(lineId, updatedWords, "words", extraUpdates);
+      void handleWordChangeWithDivergenceCheck(lineId, split.words, "words", extraUpdates);
     } else {
-      void handleWordChangeWithDivergenceCheck(lineId, updatedWords, "backgroundWords", {
-        ...manualBackgroundWordEdit(updatedWords),
+      void handleWordChangeWithDivergenceCheck(lineId, split.words, "backgroundWords", {
+        ...manualBackgroundWordEdit(split.words),
         ...extraUpdates,
       });
     }

@@ -1,18 +1,26 @@
-import {
-  TARGET_SAMPLE_RATE,
-  decodeFileToFloat32,
-  floatChannelsToWavBlob,
-  hashFile,
-} from "@/audio/separation/audio-codec";
-import { computeInstrumental } from "@/audio/separation/derived-stems";
+import { TARGET_SAMPLE_RATE, decodeFileToFloat32, hashFile } from "@/audio/separation/audio-codec";
 import { hasCachedModel } from "@/audio/separation/model-cache";
 import { getModelDescriptor, isModelHostingConfigured } from "@/audio/separation/model-registry";
-import { getStem, hasStems, putStem } from "@/audio/separation/stem-store";
+import { encodeSeparatedStems } from "@/audio/separation/separated-stems";
+import {
+  cancelSeparationWorker,
+  disposeSeparationWorker,
+  getSeparationWorker,
+} from "@/audio/separation/shared-separation-worker";
+import {
+  beginLoadingStemJob,
+  endLoadingStemJob,
+  getStem,
+  hasStems,
+  isStemJobLoading,
+  putStem,
+  stemJobKey,
+} from "@/audio/separation/stem-store";
 import type { SeparationError, SeparationStatus, Stem } from "@/audio/separation/types";
 import { hasOnlyFiniteSamples } from "@/audio/separation/validate-channels";
-import { SeparationWorker } from "@/audio/separation/worker-host";
-import { useAudioStore } from "@/stores/audio";
-import type { VocalModelVariant } from "@/stores/settings";
+import type { SeparationWorker } from "@/audio/separation/worker-host";
+import { playableFile, useAudioStore } from "@/stores/audio";
+import { runModelDownload } from "@/stores/separation-model-download";
 import { useSettingsStore } from "@/stores/settings";
 import { create } from "zustand";
 
@@ -21,6 +29,7 @@ interface SeparationState {
   progress: { loaded: number; total: number };
   error: SeparationError | null;
   currentStem: Stem;
+  otherStem: Exclude<Stem, "original">;
   availableStems: Stem[];
   modelCached: boolean;
   jobKey: string | null;
@@ -40,19 +49,17 @@ interface SeparationActions {
   reset: () => void;
 }
 
-let worker: SeparationWorker | null = null;
 let isCancelling = false;
+let separationRun = 0;
 
-function getWorker(): SeparationWorker {
-  if (!worker) worker = new SeparationWorker();
-  return worker;
+function endSeparationRun(): void {
+  separationRun += 1;
 }
 
-function disposeWorker() {
-  if (worker) {
-    worker.dispose();
-    worker = null;
-  }
+function beginSeparationRun(): () => boolean {
+  endSeparationRun();
+  const run = separationRun;
+  return () => run === separationRun;
 }
 
 function revokeUrls(urls: Partial<Record<Stem, string>>) {
@@ -61,35 +68,12 @@ function revokeUrls(urls: Partial<Record<Stem, string>>) {
   }
 }
 
-type SetSeparationState = (partial: Partial<SeparationState>) => void;
-
-// Shared download-init prologue used by both `downloadModel` (which then sets
-// idle) and `separate` (which then continues to processing). Returns true if
-// the model initialised, false if it aborted or errored. On abort/error the
-// caller's status has already been written to "idle" or "error".
-async function runModelDownload(set: SetSeparationState, variant: VocalModelVariant): Promise<boolean> {
-  set({ status: "downloading", error: null, progress: { loaded: 0, total: 0 } });
-  try {
-    await getWorker().init({
-      variant,
-      onProgress: (loaded, total) => set({ progress: { loaded, total } }),
-    });
-    return true;
-  } catch (err) {
-    if ((err as Error).name === "AbortError" || isCancelling) {
-      set({ status: "idle" });
-    } else {
-      set({ status: "error", error: { code: "fetch-failed", message: (err as Error).message } });
-    }
-    return false;
-  }
-}
-
 const useSeparationStore = create<SeparationState & SeparationActions>((set, get) => ({
   status: "idle",
   progress: { loaded: 0, total: 0 },
   error: null,
   currentStem: "original",
+  otherStem: "vocals",
   availableStems: ["original"],
   modelCached: false,
   jobKey: null,
@@ -108,34 +92,42 @@ const useSeparationStore = create<SeparationState & SeparationActions>((set, get
   },
 
   refreshForCurrentSource: async () => {
+    endSeparationRun();
     revokeUrls(get().stemUrls);
     const source = useAudioStore.getState().source;
-    const file = source?.type === "file" ? source.file : source?.type === "youtube" ? source.file : null;
+    const file = playableFile(source);
     if (!file) {
       set({ jobKey: null, availableStems: ["original"], stemUrls: {}, currentStem: "original", status: "idle" });
       return;
     }
     const variant = useSettingsStore.getState().vocalModelVariant;
+    // Until the new file is hashed, the previous job must not be read or written as this song's.
+    set({ jobKey: null });
     const audioHash = await hashFile(file);
-    const jobKey = `${audioHash}|${variant}`;
+    const jobKey = stemJobKey(audioHash, variant);
 
-    const has = await hasStems(audioHash, variant);
-    if (!has) {
-      set({ jobKey, availableStems: ["original"], stemUrls: {}, currentStem: "original", status: "idle" });
-      return;
+    beginLoadingStemJob(jobKey);
+    try {
+      const has = await hasStems(audioHash, variant);
+      if (!has) {
+        set({ jobKey, availableStems: ["original"], stemUrls: {}, currentStem: "original", status: "idle" });
+        return;
+      }
+
+      const vocalsBlob = await getStem(audioHash, "vocals", variant);
+      const instrumentalBlob = await getStem(audioHash, "instrumental", variant);
+      const stemUrls: Partial<Record<Stem, string>> = {};
+      if (vocalsBlob) stemUrls.vocals = URL.createObjectURL(vocalsBlob);
+      if (instrumentalBlob) stemUrls.instrumental = URL.createObjectURL(instrumentalBlob);
+      set({
+        jobKey,
+        availableStems: ["original", "vocals", "instrumental"],
+        stemUrls,
+        status: "ready",
+      });
+    } finally {
+      endLoadingStemJob(jobKey);
     }
-
-    const vocalsBlob = await getStem(audioHash, "vocals", variant);
-    const instrumentalBlob = await getStem(audioHash, "instrumental", variant);
-    const stemUrls: Partial<Record<Stem, string>> = {};
-    if (vocalsBlob) stemUrls.vocals = URL.createObjectURL(vocalsBlob);
-    if (instrumentalBlob) stemUrls.instrumental = URL.createObjectURL(instrumentalBlob);
-    set({
-      jobKey,
-      availableStems: ["original", "vocals", "instrumental"],
-      stemUrls,
-      status: "ready",
-    });
   },
 
   downloadModel: async () => {
@@ -148,7 +140,7 @@ const useSeparationStore = create<SeparationState & SeparationActions>((set, get
     }
     isCancelling = false;
     const variant = useSettingsStore.getState().vocalModelVariant;
-    if (await runModelDownload(set, variant)) {
+    if (await runModelDownload(set, variant, () => isCancelling)) {
       set({ status: "idle", modelCached: true });
     }
   },
@@ -162,12 +154,14 @@ const useSeparationStore = create<SeparationState & SeparationActions>((set, get
       return;
     }
     const source = useAudioStore.getState().source;
-    const file = source?.type === "file" ? source.file : source?.type === "youtube" ? source.file : null;
+    const file = playableFile(source);
     if (!file) return;
 
     isCancelling = false;
+    const isCurrentRun = beginSeparationRun();
     const variant = useSettingsStore.getState().vocalModelVariant;
-    if (!(await runModelDownload(set, variant))) return;
+    if (!(await runModelDownload(set, variant, () => isCancelling))) return;
+    if (!isCurrentRun()) return;
     set({ modelCached: true });
 
     set({ status: "processing", progress: { loaded: 0, total: 0 } });
@@ -175,22 +169,27 @@ const useSeparationStore = create<SeparationState & SeparationActions>((set, get
     try {
       decoded = await decodeFileToFloat32(file);
     } catch (err) {
+      if (!isCurrentRun()) return;
       set({ status: "error", error: { code: "decode-failed", message: (err as Error).message } });
       return;
     }
 
     const audioHash = await hashFile(file);
-    const jobKey = `${audioHash}|${variant}`;
+    if (!isCurrentRun()) return;
+    const jobKey = stemJobKey(audioHash, variant);
     set({ jobKey });
 
     let result: Awaited<ReturnType<SeparationWorker["process"]>>;
     try {
-      result = await getWorker().process({
+      result = await getSeparationWorker().process({
         channels: decoded.channels,
         totalFrames: decoded.numFrames,
-        onProgress: (processed, total) => set({ progress: { loaded: processed, total } }),
+        onProgress: (processed, total) => {
+          if (isCurrentRun()) set({ progress: { loaded: processed, total } });
+        },
       });
     } catch (err) {
+      if (!isCurrentRun()) return;
       if ((err as Error).name === "AbortError" || isCancelling) {
         set({ status: "idle" });
         return;
@@ -198,6 +197,7 @@ const useSeparationStore = create<SeparationState & SeparationActions>((set, get
       set({ status: "error", error: { code: "ort-failed", message: (err as Error).message } });
       return;
     }
+    if (!isCurrentRun()) return;
 
     if (!hasOnlyFiniteSamples(result.vocals)) {
       set({
@@ -211,11 +211,18 @@ const useSeparationStore = create<SeparationState & SeparationActions>((set, get
       return;
     }
 
-    const instrumental = computeInstrumental(decoded.channels, result.vocals);
-    const vocalsBlob = floatChannelsToWavBlob(result.vocals, TARGET_SAMPLE_RATE);
-    const instrumentalBlob = floatChannelsToWavBlob(instrumental, TARGET_SAMPLE_RATE);
+    let stemFiles: Awaited<ReturnType<typeof encodeSeparatedStems>>;
+    try {
+      stemFiles = await encodeSeparatedStems(decoded.channels, result.vocals, TARGET_SAMPLE_RATE);
+    } catch (err) {
+      if (!isCurrentRun()) return;
+      set({ status: "error", error: { code: "unknown", message: (err as Error).message } });
+      return;
+    }
+    const { vocals: vocalsBlob, instrumental: instrumentalBlob } = stemFiles;
     await putStem(audioHash, "vocals", variant, vocalsBlob);
     await putStem(audioHash, "instrumental", variant, instrumentalBlob);
+    if (!isCurrentRun()) return;
 
     revokeUrls(get().stemUrls);
     const stemUrls: Partial<Record<Stem, string>> = {
@@ -232,7 +239,7 @@ const useSeparationStore = create<SeparationState & SeparationActions>((set, get
   selectStem: (stem) => {
     const available = get().availableStems;
     if (!available.includes(stem)) return;
-    set({ currentStem: stem });
+    set(stem === "original" ? { currentStem: stem } : { currentStem: stem, otherStem: stem });
   },
 
   // Called once at boot by usePersistence to seed currentStem from the saved
@@ -242,12 +249,13 @@ const useSeparationStore = create<SeparationState & SeparationActions>((set, get
   // been populated yet. refreshForCurrentSource handles eviction by overwriting
   // back to "original" when the cached stems are gone.
   restoreCurrentStem: (stem) => {
-    set({ currentStem: stem });
+    set(stem === "original" ? { currentStem: stem } : { currentStem: stem, otherStem: stem });
   },
 
   cancel: () => {
     isCancelling = true;
-    if (worker) worker.cancel();
+    endSeparationRun();
+    cancelSeparationWorker();
     set({ status: "idle", progress: { loaded: 0, total: 0 } });
   },
 
@@ -257,13 +265,15 @@ const useSeparationStore = create<SeparationState & SeparationActions>((set, get
   },
 
   reset: () => {
+    endSeparationRun();
     revokeUrls(get().stemUrls);
-    disposeWorker();
+    disposeSeparationWorker();
     set({
       status: "idle",
       progress: { loaded: 0, total: 0 },
       error: null,
       currentStem: "original",
+      otherStem: "vocals",
       availableStems: ["original"],
       jobKey: null,
       stemUrls: {},
@@ -271,4 +281,13 @@ const useSeparationStore = create<SeparationState & SeparationActions>((set, get
   },
 }));
 
-export { useSeparationStore };
+function toggledStem(): Stem {
+  const { currentStem, otherStem } = useSeparationStore.getState();
+  return currentStem === "original" ? otherStem : "original";
+}
+
+function isStemJobInUse(jobKey: string): boolean {
+  return jobKey === useSeparationStore.getState().jobKey || isStemJobLoading(jobKey);
+}
+
+export { useSeparationStore, isStemJobInUse, toggledStem };

@@ -1,4 +1,4 @@
-import { trimTrailingSlashes } from "@/utils/url";
+import { stripTrailingSlashes } from "@/utils/url";
 
 // -- Types --------------------------------------------------------------------
 
@@ -29,7 +29,7 @@ class LlmRequestError extends Error {
 // -- Helpers ------------------------------------------------------------------
 
 function endpointUrl(baseUrl: string, path: string): string {
-  return `${trimTrailingSlashes(baseUrl.trim())}/${path}`;
+  return `${stripTrailingSlashes(baseUrl.trim())}/${path}`;
 }
 
 function requestHeaders(apiKey: string): Headers {

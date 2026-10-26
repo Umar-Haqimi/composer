@@ -1,4 +1,5 @@
 import { getEffectiveKeysArray } from "@/stores/shortcut-bindings";
+import { KEYCAP_CLASS } from "@/ui/inline-key-badge";
 import { formatKey } from "@/utils/format-key";
 import { isMac } from "@/utils/platform";
 import { IconCommand } from "@tabler/icons-react";
@@ -24,7 +25,57 @@ const SHORTCUT_SECTIONS: ShortcutSectionProps[] = [
     shortcuts: [
       { keys: ["Shift", "?"], description: "Show keyboard shortcuts", shortcutId: "global.help" },
       { keys: ["Enter"], description: "Play / Pause audio", shortcutId: "global.playPause" },
+      {
+        keys: ["Mod", "Enter"],
+        description: "Play / Pause audio, even while typing",
+        shortcutId: "global.playPauseWhileTyping",
+      },
+      { keys: ["Shift", "<"], description: "Seek back", shortcutId: "global.seekBackward" },
+      { keys: ["Shift", ">"], description: "Seek forward", shortcutId: "global.seekForward" },
+      {
+        keys: ["Mod", "Shift", "<"],
+        description: "Seek back, even while typing",
+        shortcutId: "global.seekBackwardWhileTyping",
+      },
+      {
+        keys: ["Mod", "Shift", ">"],
+        description: "Seek forward, even while typing",
+        shortcutId: "global.seekForwardWhileTyping",
+      },
+      { keys: ["Alt", "Shift", "<"], description: "Fine seek back", shortcutId: "global.seekBackwardFine" },
+      { keys: ["Alt", "Shift", ">"], description: "Fine seek forward", shortcutId: "global.seekForwardFine" },
+      {
+        keys: ["Mod", "Alt", "Shift", "<"],
+        description: "Fine seek back, even while typing",
+        shortcutId: "global.seekBackwardFineWhileTyping",
+      },
+      {
+        keys: ["Mod", "Alt", "Shift", ">"],
+        description: "Fine seek forward, even while typing",
+        shortcutId: "global.seekForwardFineWhileTyping",
+      },
+      {
+        keys: ["Shift", "R"],
+        description: "Switch between normal speed and the last speed you used (0.75x at first)",
+        shortcutId: "global.togglePlaybackSpeed",
+      },
+      {
+        keys: ["Shift", "O"],
+        description: "Switch between the original audio and the last stem you used (vocals at first)",
+        shortcutId: "global.toggleStem",
+      },
+      { keys: ["Mod", "O"], description: "Switch project", shortcutId: "global.openProjectSwitcher" },
+      { keys: ["Mod", "Alt", "N"], description: "New project", shortcutId: "global.newProject" },
+      { keys: ["Mod", "S"], description: "Save now", shortcutId: "global.saveNow" },
+      { keys: ["Shift", "L"], description: "Loop the playback range", shortcutId: "global.toggleLoop" },
       { keys: ["Mod", "Shift", "Alt", "E"], description: "Download saved work", shortcutId: "global.panicRecovery" },
+    ],
+  },
+  {
+    title: "Projects",
+    shortcuts: [
+      { keys: ["/"], description: "Search projects", shortcutId: "library.focusSearch" },
+      { keys: ["Backspace"], description: "Delete selected projects", shortcutId: "library.deleteSelection" },
     ],
   },
   {
@@ -46,8 +97,8 @@ const SHORTCUT_SECTIONS: ShortcutSectionProps[] = [
       { keys: ["ArrowLeft"], description: "Nudge last synced -50ms", shortcutId: "sync.nudgeLeft" },
       { keys: ["ArrowRight"], description: "Nudge last synced +50ms", shortcutId: "sync.nudgeRight" },
       { keys: ["R"], description: "Undo line sync and rewind", shortcutId: "sync.undoAndRewind" },
-      { keys: ["Mod", "Z"], description: "Undo" },
-      { keys: ["Mod", "Shift", "Z"], description: "Redo" },
+      { keys: ["Mod", "Z"], description: "Undo", shortcutId: "global.undo" },
+      { keys: ["Mod", "Shift", "Z"], description: "Redo", shortcutId: "global.redo" },
     ],
   },
   {
@@ -57,6 +108,9 @@ const SHORTCUT_SECTIONS: ShortcutSectionProps[] = [
       { keys: ["P"], description: "Toggle preview sidebar", shortcutId: "timeline.togglePreview" },
       { keys: ["R"], description: "Toggle rolling edit", shortcutId: "timeline.toggleRollingEdit" },
       { keys: ["T"], description: "Toggle snap (magnet)", shortcutId: "timeline.toggleSnap" },
+      { keys: ["B"], description: "Show or hide the beat grid", shortcutId: "timeline.toggleBeatGrid" },
+      { keys: ["V"], description: "Show spectrum", shortcutId: "timeline.toggleSpectrum" },
+      { keys: ["K"], description: "Pitch line", shortcutId: "timeline.togglePitchLine" },
       { keys: ["N"], description: "Insert line below selected word", shortcutId: "timeline.insertLineBelow" },
       { keys: ["Shift", "N"], description: "Insert line above selected word", shortcutId: "timeline.insertLineAbove" },
       { keys: ["X"], description: "Expand all lines", shortcutId: "timeline.expandAll" },
@@ -64,8 +118,8 @@ const SHORTCUT_SECTIONS: ShortcutSectionProps[] = [
       { keys: ["Escape"], description: "Deselect / cancel paste" },
       { keys: ["["], description: "Set word begin to playhead", shortcutId: "timeline.setWordBegin" },
       { keys: ["]"], description: "Set word end to playhead", shortcutId: "timeline.setWordEnd" },
-      { keys: ["Mod", "Z"], description: "Undo" },
-      { keys: ["Mod", "Shift", "Z"], description: "Redo" },
+      { keys: ["Mod", "Z"], description: "Undo", shortcutId: "global.undo" },
+      { keys: ["Mod", "Shift", "Z"], description: "Redo", shortcutId: "global.redo" },
       { keys: ["Mod", "Shift", "V"], description: "Import lyrics", shortcutId: "timeline.importLyrics" },
       { keys: ["Mod", "Scroll"], description: "Zoom in / out" },
       { keys: ["Middle", "Drag"], description: "Pan timeline" },
@@ -82,10 +136,10 @@ const SHORTCUT_SECTIONS: ShortcutSectionProps[] = [
       { keys: ["Mod", "Click"], description: "Toggle word in selection" },
       { keys: ["Drag"], description: "Marquee select words" },
       { keys: ["Shift", "Drag"], description: "Add to selection with marquee" },
-      { keys: ["Mod", "C"], description: "Copy selected words" },
-      { keys: ["Mod", "X"], description: "Cut selected words" },
-      { keys: ["Mod", "V"], description: "Paste (ghost preview, click to place)" },
-      { keys: ["Delete"], description: "Delete selected words" },
+      { keys: ["Mod", "C"], description: "Copy selected words", shortcutId: "timeline.copy" },
+      { keys: ["Mod", "X"], description: "Cut selected words", shortcutId: "timeline.cut" },
+      { keys: ["Mod", "V"], description: "Paste (ghost preview, click to place)", shortcutId: "timeline.paste" },
+      { keys: ["Backspace"], description: "Delete selected words", shortcutId: "timeline.deleteSelection" },
       { keys: ["Alt", "Drag"], description: "Duplicate selected words" },
       { keys: ["E"], description: "Edit selected word text", shortcutId: "timeline.editWord" },
       { keys: ["F2"], description: "Edit selected word text" },
@@ -120,6 +174,10 @@ const SHORTCUT_SECTIONS: ShortcutSectionProps[] = [
         description: "Jump to start of current instance",
         shortcutId: "timeline.jumpToInstanceStart",
       },
+      { keys: ["Shift", "Enter"], description: "Open the selected group", shortcutId: "timeline.openGroup" },
+      { keys: ["Escape"], description: "Close the open group", shortcutId: "timeline.closeGroup" },
+      { keys: ["Alt", "Enter"], description: "Play the selection", shortcutId: "timeline.playSelection" },
+      { keys: ["Shift", "L"], description: "Loop the playback range", shortcutId: "global.toggleLoop" },
       { keys: ["ArrowLeft"], description: "Nudge selected words / instance earlier" },
       { keys: ["ArrowRight"], description: "Nudge selected words / instance later" },
       { keys: ["Mod", "Shift", "D"], description: "Detach current instance", shortcutId: "timeline.detachInstance" },
@@ -138,27 +196,18 @@ const SHORTCUT_SECTIONS: ShortcutSectionProps[] = [
 
 // -- Components ---------------------------------------------------------------
 
-const KeyBadge: React.FC<{ keyName: string }> = ({ keyName }) => {
-  const formatted = formatKey(keyName);
-  const isSymbol = formatted.length === 1 && !/[a-zA-Z0-9]/.test(formatted);
-
-  return (
-    <span
-      className={`inline-flex items-center justify-center min-w-6 h-6 px-1.5 text-xs font-medium rounded bg-composer-button border border-composer-border ${
-        isSymbol ? "text-base" : ""
-      }`}
-    >
-      {(keyName === "Mod" || keyName === "Meta") && isMac ? <IconCommand className="size-3.5" /> : formatted}
-    </span>
-  );
-};
+const KeyBadge: React.FC<{ keyName: string }> = ({ keyName }) => (
+  <span className={KEYCAP_CLASS}>
+    {(keyName === "Mod" || keyName === "Meta") && isMac ? <IconCommand className="size-2.5" /> : formatKey(keyName)}
+  </span>
+);
 
 const ShortcutItem: React.FC<ShortcutItemProps> = ({ keys, description, shortcutId }) => {
   const resolvedKeys = shortcutId ? getEffectiveKeysArray(shortcutId) : keys;
   return (
     <div className="flex items-center justify-between py-1.5">
       <span className="text-sm text-composer-text-secondary">{description}</span>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5">
         {resolvedKeys.map((key) => (
           <KeyBadge key={key} keyName={key} />
         ))}

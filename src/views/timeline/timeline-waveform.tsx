@@ -1,23 +1,80 @@
 import { useAudioStore } from "@/stores/audio";
-import { useProjectStore } from "@/stores/project";
-import { useSettingsStore } from "@/stores/settings";
 import { useThemeStore } from "@/stores/theme";
+import { isAbortError } from "@/utils/abort-error";
 import { cn } from "@/utils/cn";
 import { readToken } from "@/utils/theme/read-token";
+import { BeatGridCanvas } from "@/views/timeline/beat-grid/beat-grid-canvas";
+import { startLoopRegionDrag } from "@/views/timeline/loop-region-drag";
+import { LoopRegionEdges } from "@/views/timeline/loop-region-edges";
+import { useOverviewBandHeight } from "@/views/timeline/overview-band-height";
+import { OverviewBand } from "@/views/timeline/overview/overview-band";
+import { placeSnapPoint } from "@/views/timeline/place-snap-point";
 import { snapPlayheadTime } from "@/views/timeline/playhead-snap";
-import { snapTimeToOnset } from "@/views/timeline/snap-marker-math";
+import { clearLoopRegion } from "@/views/timeline/selection-playback";
 import { WAVEFORM_HEIGHT, useTimelineStore } from "@/views/timeline/timeline-store";
+import { WaveformFocusShade } from "@/views/timeline/waveform-focus-shade";
 import WavesurferPlayer from "@wavesurfer/react";
 import { useCallback, useEffect, useState } from "react";
 import type WaveSurfer from "wavesurfer.js";
 
+// -- Interfaces ----------------------------------------------------------------
+
+interface WaveformBarsProps {
+  media: HTMLAudioElement;
+  width: number;
+  shown: boolean;
+  colors: { wave: string; progress: string };
+  initialZoom: number;
+  onDestroy: () => void;
+  onReady: (wavesurfer: WaveSurfer) => void;
+}
+
 // -- Constants -----------------------------------------------------------------
 
 const FADE_SETTLE_MS = 260;
+// The bars sit in a 13px margin inside the 80px band.
+const WAVEFORM_BARS_HEIGHT = 54;
+const LOG_PREFIX = "[TimelineWaveform]";
 
 // -- Component -----------------------------------------------------------------
 
+const WaveformBars: React.FC<WaveformBarsProps> = ({
+  media,
+  width,
+  shown,
+  colors,
+  initialZoom,
+  onDestroy,
+  onReady,
+}) => (
+  <div
+    data-waveform-fade
+    className="pt-[13px] overflow-clip transition-opacity duration-150 ease-in"
+    style={{ width, opacity: shown ? 1 : 0 }}
+  >
+    <div className="w-max">
+      <WavesurferPlayer
+        height={WAVEFORM_BARS_HEIGHT}
+        waveColor={colors.wave}
+        progressColor={colors.progress}
+        cursorColor="transparent"
+        barWidth={2}
+        barGap={1}
+        barRadius={12}
+        media={media}
+        interact={false}
+        hideScrollbar={true}
+        fillParent={false}
+        minPxPerSec={initialZoom}
+        onDestroy={onDestroy}
+        onReady={onReady}
+      />
+    </div>
+  </div>
+);
+
 const TimelineWaveform: React.FC = () => {
+  const bandHeight = useOverviewBandHeight();
   const source = useAudioStore((s) => s.source);
   const duration = useAudioStore((s) => s.duration);
   const audioElement = useAudioStore((s) => s.audioElement);
@@ -26,6 +83,7 @@ const TimelineWaveform: React.FC = () => {
   const zoom = useTimelineStore((s) => s.zoom);
   const activeThemeId = useThemeStore((s) => s.activeThemeId);
   const markerMode = useTimelineStore((s) => s.markerMode);
+  const spectrumVisible = useTimelineStore((s) => s.spectrumVisible);
 
   const [ws, setWs] = useState<WaveSurfer | null>(null);
   const [settledFor, setSettledFor] = useState<WaveSurfer | null>(null);
@@ -41,7 +99,7 @@ const TimelineWaveform: React.FC = () => {
     wave: readToken("wave"),
     progress: readToken("wave-progress"),
   }));
-  // @wavesurfer/react rebuilds the instance whenever any option changes; later zooms go through ws.zoom().
+  // @wavesurfer/react rebuilds the instance whenever any option changes; later zooms go through ws.setOptions(), which unlike ws.zoom() never throws mid-reload.
   const [initialZoom] = useState(() => useTimelineStore.getState().zoom);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: activeThemeId re-applies DOM-resolved colors on theme change without remounting WaveSurfer
@@ -53,16 +111,20 @@ const TimelineWaveform: React.FC = () => {
   useEffect(() => {
     if (!ws || !audioElement) return;
     const onLoadStart = () => {
-      if (audioElement.src) void ws.load(audioElement.src);
+      if (!audioElement.src) return;
+      ws.load(audioElement.src).catch((error: unknown) => {
+        if (!isAbortError(error)) console.error(LOG_PREFIX, "waveform reload failed", error);
+      });
     };
     audioElement.addEventListener("loadstart", onLoadStart);
     return () => audioElement.removeEventListener("loadstart", onLoadStart);
   }, [ws, audioElement]);
 
+  // Hidden under the spectrum the waveform keeps its old zoom; it catches up when it shows again.
   useEffect(() => {
-    if (!ws) return;
-    ws.zoom(zoom);
-  }, [ws, zoom]);
+    if (!ws || spectrumVisible || ws.options.minPxPerSec === zoom) return;
+    ws.setOptions({ minPxPerSec: zoom });
+  }, [ws, zoom, spectrumVisible]);
 
   useEffect(() => {
     if (!ws) return;
@@ -79,29 +141,23 @@ const TimelineWaveform: React.FC = () => {
     [duration, totalWidth],
   );
 
-  const addSnappedPoint = useCallback((time: number) => {
-    const { zoom: currentZoom, vocalOnsetSnapPoints } = useTimelineStore.getState();
-    const { vocalOnsetSnap, timelineSnapThreshold } = useSettingsStore.getState();
-    const onsets = vocalOnsetSnap ? vocalOnsetSnapPoints : [];
-    useProjectStore.getState().addCustomSnapPoint(snapTimeToOnset(time, onsets, currentZoom, timelineSnapThreshold));
-  }, []);
-
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       e.stopPropagation();
       if (!duration || totalWidth <= 0) return;
       const time = timeFromClick(e);
       if (useTimelineStore.getState().markerMode) {
-        if (e.detail <= 1) addSnappedPoint(time);
+        if (e.detail <= 1) placeSnapPoint(time);
         return;
       }
       if (e.altKey) {
-        addSnappedPoint(time);
+        placeSnapPoint(time);
         return;
       }
+      clearLoopRegion();
       seekTo(snapPlayheadTime(time, e.metaKey));
     },
-    [duration, totalWidth, timeFromClick, addSnappedPoint, seekTo],
+    [duration, totalWidth, timeFromClick, seekTo],
   );
 
   const onDestroy = useCallback(() => {
@@ -121,58 +177,60 @@ const TimelineWaveform: React.FC = () => {
 
   // A bunch of heights here are -1 to account for the 1px border at the bottom of the waveform container.
   return (
-    <div className="sticky ml-12 top-0 z-40 bg-composer-bg w-max">
+    <OverviewBand>
       <div
         data-waveform-redraw-bg
-        className="absolute top-0 left-0 bg-composer-bg border-b border-composer-border shadow-lg pointer-events-none"
+        className={cn(
+          "absolute top-0 left-0 bg-(--well) border-b border-(--divider) pointer-events-none transition-opacity duration-200",
+          spectrumVisible && "opacity-0",
+        )}
         style={{ width: totalWidth, height: WAVEFORM_HEIGHT }}
       />
+      <BeatGridCanvas />
       <div
         data-waveform-loading-dots
         data-sweeping={sweeping ? "" : undefined}
         aria-hidden="true"
         className="absolute top-0 left-0 waveform-loading-dots pointer-events-none transition-opacity duration-200 ease-out"
-        style={{ width: totalWidth, height: WAVEFORM_HEIGHT - 1, opacity: ws ? 0 : 1 }}
+        style={{ width: totalWidth, height: WAVEFORM_HEIGHT - 1, opacity: ws || spectrumVisible ? 0 : 1 }}
       />
       {audioElement && (
-        <div data-waveform-fade className="transition-opacity duration-150 ease-in" style={{ opacity: ws ? 1 : 0 }}>
-          <WavesurferPlayer
-            key={waveformKey}
-            height={WAVEFORM_HEIGHT}
-            waveColor={initialColors.wave}
-            progressColor={initialColors.progress}
-            cursorColor="transparent"
-            barWidth={2}
-            barGap={1}
-            barRadius={12}
-            media={audioElement}
-            interact={false}
-            hideScrollbar={true}
-            fillParent={false}
-            minPxPerSec={initialZoom}
-            onDestroy={onDestroy}
-            onReady={onReady}
-          />
-        </div>
+        <WaveformBars
+          key={waveformKey}
+          media={audioElement}
+          width={totalWidth}
+          shown={ws !== null && !spectrumVisible}
+          colors={initialColors}
+          initialZoom={initialZoom}
+          onDestroy={onDestroy}
+          onReady={onReady}
+        />
       )}
+      <WaveformFocusShade />
       <div
         role="button"
         tabIndex={-1}
         aria-label={markerMode ? "Place snap point" : "Seek to position"}
         className={cn(
-          "absolute top-0 left-0 z-10 transition-shadow duration-200 ease-out",
-          markerMode ? "waveform-armed" : altHeld ? "cursor-crosshair" : "cursor-pointer",
+          "absolute top-0 left-0 z-10",
+          markerMode ? "waveform-armed" : altHeld || spectrumVisible ? "cursor-crosshair" : "cursor-pointer",
         )}
         key="waveform-click-layer"
         style={{
           width: totalWidth,
-          height: WAVEFORM_HEIGHT - 1,
+          height: bandHeight - 1,
+        }}
+        onMouseDown={(e) => {
+          if (useTimelineStore.getState().pasteMode.status === "preview") return;
+          const container = e.currentTarget.closest<HTMLElement>("[data-scroll-container]");
+          if (container) startLoopRegionDrag(e, container, null);
         }}
         onClick={handleClick}
         onPointerMove={(e) => setAltHeld(e.altKey)}
         onKeyDown={() => {}}
       />
-    </div>
+      <LoopRegionEdges />
+    </OverviewBand>
   );
 };
 

@@ -6,6 +6,7 @@ import {
   IconDeviceFloppy,
   IconKeyboard,
   IconLanguage,
+  IconLayoutList,
   IconLayoutRows,
   IconPalette,
   IconPlayerPlay,
@@ -17,6 +18,7 @@ import {
 
 const SETTINGS_SECTION_ICONS: Record<SettingsSectionId, ModalNavSection["icon"]> = {
   general: IconSettings,
+  projects: IconLayoutList,
   theme: IconPalette,
   playback: IconPlayerPlay,
   timeline: IconLayoutRows,

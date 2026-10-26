@@ -1,4 +1,5 @@
-import { GOOGLE_TRANSLATION_PROVIDER, useSettingsStore } from "@/stores/settings";
+import { useSettingsStore } from "@/stores/settings";
+import { GOOGLE_TRANSLATION_PROVIDER } from "@/stores/settings-llm-profiles";
 import { Select } from "@/ui/select";
 import { SettingLink } from "@/ui/setting-link";
 import { useMemo } from "react";

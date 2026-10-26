@@ -1,5 +1,7 @@
+import { timeRangeResolver } from "@/domain/group/shared-timing";
 import type { ReadableLine } from "@/domain/line/effective-words";
 import type { WordSelection } from "@/domain/selection/model";
+import { swallowTrailingClick } from "@/lib/swallow-trailing-click";
 import { useAudioStore } from "@/stores/audio";
 import { useProjectStore } from "@/stores/project";
 import { handleAltDuplicate } from "@/views/timeline/alt-duplicate";
@@ -80,6 +82,7 @@ function useTimelineDnd(lines: ReadableLine[]) {
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
+      swallowTrailingClick();
       setActiveDrag(null);
       useTimelineStore.getState().setWordDragHover(null);
       document.body.style.cursor = "";
@@ -97,8 +100,11 @@ function useTimelineDnd(lines: ReadableLine[]) {
       const activeData = active.data.current as DragData | undefined;
       if (!activeData) return;
 
+      const { lines: rawLines, groups } = useProjectStore.getState();
+      const rangeOf = timeRangeResolver(rawLines, groups, duration);
+
       if (isAltDrag) {
-        handleAltDuplicate(event, lines, zoom, duration);
+        handleAltDuplicate(event, lines, zoom, rangeOf);
         return;
       }
 
@@ -128,7 +134,7 @@ function useTimelineDnd(lines: ReadableLine[]) {
 
       if (sameLine && sameTrack) {
         if (Math.abs(delta.x) < DRAG_X_MIN_THRESHOLD) return;
-        applySameLineReorder(activeData, wordsToMove, lines, timeDelta, duration, updateLineWithHistory);
+        applySameLineReorder(activeData, wordsToMove, lines, timeDelta, rangeOf, updateLineWithHistory);
         return;
       }
 
@@ -139,7 +145,7 @@ function useTimelineDnd(lines: ReadableLine[]) {
         wordsToMove,
         lines,
         timeDelta,
-        duration,
+        rangeOf,
       });
     },
     [updateLineWithHistory, zoom, duration, lines],

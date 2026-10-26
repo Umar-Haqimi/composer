@@ -165,7 +165,7 @@ describe("Google partial request failures", () => {
         translations: [{ language: "en", main: new Map([["line", first]]), background: new Map() }],
       });
       expect(updates).not.toHaveProperty("transliteration");
-      expect(updates.translations?.en).toBe(line.translations.en);
+      expect(updates).not.toHaveProperty("translations");
 
       fetchMock.mockImplementation(
         async () => new Response(JSON.stringify([[["retry value", source, "retry value"]], null, "en"])),
