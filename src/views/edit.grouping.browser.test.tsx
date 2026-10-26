@@ -5,6 +5,7 @@ import { render } from "@/test/render";
 import { EditPanel } from "@/views/edit";
 import { findRepeatingStandaloneSections } from "@/views/grouping/repeating-sections";
 import { describe, expect, it } from "vitest";
+import { userEvent } from "vitest/browser";
 
 // -- Fixtures -----------------------------------------------------------------
 
@@ -89,6 +90,22 @@ describe("EditPanel · grouping suggestions", () => {
         .not.toBeInTheDocument();
       expect(store().groups).toEqual([]);
     });
+  });
+
+  it("renames a group from its preview header in one undo step", async () => {
+    useProjectStore.setState({ activeTab: "edit", lines: songWithTwoChoruses(), groups: [] });
+    store().groupRepeatingSections([1, 4], 2, { label: "Group 1" });
+    store().clearHistory();
+    const screen = await render(<EditPanel />);
+
+    await screen.getByRole("button", { name: "Rename group Group 1" }).first().dblClick();
+    await screen.getByRole("textbox", { name: "Group name" }).fill("Chorus");
+    await userEvent.keyboard("{Enter}");
+
+    await expect.poll(() => store().groups[0]?.label).toBe("Chorus");
+    await expect.poll(() => screen.getByRole("button", { name: "Rename group Chorus" }).elements()).toHaveLength(2);
+    store().undo();
+    expect(store().groups[0]?.label).toBe("Group 1");
   });
 
   describe("regressions", () => {

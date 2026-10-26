@@ -1,3 +1,4 @@
+import type { LinkGroup } from "@/domain/group/template";
 import { instanceCount, instanceOrdinal } from "@/domain/instance/enumerate";
 import { backgroundFields } from "@/domain/line/background";
 import { remapWordTextsPreservingTiming } from "@/domain/word/remap-text";
@@ -15,7 +16,7 @@ import {
   dismissSuggestions,
   useVisibleGroupingSuggestions,
 } from "@/views/grouping/use-grouping-suggestions";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 // -- Interfaces ---------------------------------------------------------------
 
@@ -71,6 +72,12 @@ function handleExtractLine(lineId: string): void {
   });
 }
 
+function renameGroup(group: LinkGroup, next: string): void {
+  const trimmed = next.trim();
+  if (trimmed.length > 0 && trimmed !== group.label)
+    useProjectStore.getState().updateGroup(group.id, { label: trimmed });
+}
+
 // -- Components ---------------------------------------------------------------
 
 const PreviewRows: React.FC<PreviewRowsProps> = ({
@@ -91,6 +98,8 @@ const PreviewRows: React.FC<PreviewRowsProps> = ({
     () => new Map(groups.map((g) => [g.id, instanceCount(lines, g.id)])),
     [groups, lines],
   );
+  // Keyed by group and instance so only the double-clicked header turns into an input.
+  const [renamingKey, setRenamingKey] = useState<string | null>(null);
   const { visible: suggestions } = useVisibleGroupingSuggestions(showSuggestions);
   const ghostRuns = useMemo(() => ghostRunsByLineId(suggestions, lines), [suggestions, lines]);
 
@@ -123,6 +132,13 @@ const PreviewRows: React.FC<PreviewRowsProps> = ({
                 ordinal={instanceOrdinal(lines, group.id, line.instanceIdx)}
                 total={totalInstances}
                 color={group.color}
+                isRenaming={renamingKey === `${group.id}:${line.instanceIdx}`}
+                onStartRename={() => setRenamingKey(`${group.id}:${line.instanceIdx}`)}
+                onCommitRename={(next) => {
+                  renameGroup(group, next);
+                  setRenamingKey(null);
+                }}
+                onCancelRename={() => setRenamingKey(null)}
               />
             )}
             {ghost?.isFirstLine && (

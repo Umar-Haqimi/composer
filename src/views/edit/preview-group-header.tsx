@@ -1,5 +1,6 @@
 import { Button } from "@/ui/button";
 import { IconButton } from "@/ui/icon-button";
+import { RenameInput } from "@/ui/rename-input";
 import { cn } from "@/utils/cn";
 import { ROW_BODY } from "@/views/edit/line-preview";
 import { IconBulb, IconLink, IconX } from "@tabler/icons-react";
@@ -28,8 +29,14 @@ const GroupBand: React.FC<{
   color: string;
   icon: React.ReactNode;
   children: React.ReactNode;
-}> = ({ tone, color, icon, children }) => (
-  <div className="flex h-[26px] select-none" style={{ "--group": color }} data-group-band={tone}>
+  onDoubleClick?: () => void;
+}> = ({ tone, color, icon, children, onDoubleClick }) => (
+  <div
+    className="flex h-[26px] select-none"
+    style={{ "--group": color }}
+    data-group-band={tone}
+    onDoubleClick={onDoubleClick}
+  >
     <span className={cn("grid place-items-center w-11 shrink-0", BAND_TONES[tone].gutter)} aria-hidden>
       {icon}
     </span>
@@ -43,14 +50,55 @@ const RunOrdinal: React.FC<{ ordinal: number; total: number }> = ({ ordinal, tot
   </span>
 );
 
-const PreviewGroupHeader: React.FC<{ label: string; ordinal: number; total: number; color: string }> = ({
+interface PreviewGroupHeaderProps {
+  label: string;
+  ordinal: number;
+  total: number;
+  color: string;
+  isRenaming: boolean;
+  onStartRename: () => void;
+  onCommitRename: (next: string) => void;
+  onCancelRename: () => void;
+}
+
+const PreviewGroupHeader: React.FC<PreviewGroupHeaderProps> = ({
   label,
   ordinal,
   total,
   color,
+  isRenaming,
+  onStartRename,
+  onCommitRename,
+  onCancelRename,
 }) => (
-  <GroupBand tone="group" color={color} icon={<IconLink className="size-[13px] text-(--group)" />}>
-    <b className="min-w-0 truncate font-semibold text-(--group)">{label}</b>
+  <GroupBand
+    tone="group"
+    color={color}
+    icon={<IconLink className="size-[13px] text-(--group)" />}
+    onDoubleClick={isRenaming ? undefined : onStartRename}
+  >
+    {isRenaming ? (
+      <RenameInput
+        initialValue={label}
+        onCommit={onCommitRename}
+        onCancel={onCancelRename}
+        ariaLabel="Group name"
+        className="min-w-0 flex-1 text-[11.5px]"
+      />
+    ) : (
+      <button
+        type="button"
+        aria-label={`Rename group ${label}`}
+        title="Double-click to rename"
+        // detail is 0 only for keyboard activation; a mouse rename goes through the band's double-click.
+        onClick={(e) => {
+          if (e.detail === 0) onStartRename();
+        }}
+        className="min-w-0 truncate font-semibold text-(--group) rounded-sm cursor-text focus-visible:outline-1 focus-visible:outline-(--group)"
+      >
+        {label}
+      </button>
+    )}
     <RunOrdinal ordinal={ordinal} total={total} />
   </GroupBand>
 );

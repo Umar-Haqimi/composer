@@ -30,7 +30,7 @@ See `tasks/plan.md` and `SPEC.md`.
   - Verify: `pnpm typecheck`; `pnpm knip`; manual double-click rename in the timeline.
   - Files: `src/ui/rename-input.tsx` (new), `src/views/timeline/group-header-row.tsx`
 
-- [ ] T5: Double-click rename on preview group headers (test-first)
+- [x] T5: Double-click rename on preview group headers (test-first)
   - Acceptance: test 2 from SPEC passes; double-click opens the input (prefilled, selected); Enter or blur
     saves, Escape cancels, empty keeps the old name; Enter on the focused name starts rename; undo reverts.
   - Verify: write test 2, see it fail, implement, `pnpm test:component`.
