@@ -1,29 +1,21 @@
-import { useAudioStore } from "@/stores/audio";
 import { useProjectStore } from "@/stores/project";
-import { type NoticeKind, hiddenByDismissal } from "@/ui/notices/notice-model";
-import {
-  replacedOwnTimingNote,
-  showGroupActionToast,
-  showKeptOwnTimingToast,
-  showReplacedOwnTimingToast,
-} from "@/utils/group-toast";
+import type { NoticeKind } from "@/ui/notices/notice-model";
+import { showReplacedOwnTimingToast } from "@/utils/group-toast";
 import { pluralize } from "@/utils/pluralize";
-import { type RepeatingSection, findRepeatingStandaloneSections } from "@/views/grouping/repeating-sections";
+import type { RepeatingSection } from "@/views/grouping/repeating-sections";
+import {
+  acceptSuggestion,
+  dismissSuggestions,
+  groupSections,
+  useVisibleGroupingSuggestions,
+} from "@/views/grouping/use-grouping-suggestions";
 import { IconBulb, IconLink } from "@tabler/icons-react";
-import { useMemo } from "react";
 
 const MODAL_LINE_MAX = 80;
 const MODAL_LINE_LIMIT = 6;
 
 function useGroupingNotice(enabled = true): NoticeKind | null {
-  const lines = useProjectStore((s) => s.lines);
-  const dismissed = useProjectStore((s) => s.dismissedSuggestions);
-
-  const suggestions = useMemo(() => (enabled ? findRepeatingStandaloneSections(lines) : []), [enabled, lines]);
-  const { visible, dismissedFingerprints } = useMemo(
-    () => hiddenByDismissal(suggestions, dismissed),
-    [suggestions, dismissed],
-  );
+  const { visible, dismissedFingerprints } = useVisibleGroupingSuggestions(enabled);
 
   if (visible.length === 0 && dismissedFingerprints.length === 0) return null;
 
@@ -33,43 +25,24 @@ function useGroupingNotice(enabled = true): NoticeKind | null {
     tone: "accent",
     summary: pluralize(visible.length, "grouping suggestion"),
     singleAction:
-      visible.length === 1 ? { label: "Group them", icon: IconLink, run: () => acceptOne(visible[0]) } : undefined,
+      visible.length === 1
+        ? { label: "Group them", icon: IconLink, run: () => acceptSuggestion(visible[0]) }
+        : undefined,
     rows: visible.map((section) => ({
       key: suggestionKey(section),
       fingerprints: [section.fingerprint],
       title: `${section.starts.length} runs · ${pluralize(section.length, "line")} each`,
       detail: `At lines ${section.starts.map((start) => `${start + 1} to ${start + section.length}`).join(", ")}`,
       preview: <BlockPreview lines={section.previewLines} />,
-      accept: { label: "Group", icon: IconLink, run: () => acceptOne(section) },
+      accept: { label: "Group", icon: IconLink, run: () => acceptSuggestion(section) },
       dismissedLabel: `${section.starts.length} runs of ${pluralize(section.length, "line")}`,
     })),
     acceptAll: { label: "Group all", icon: IconLink, run: () => showReplacedOwnTimingToast(groupSections(visible)) },
-    dismiss: dismissFingerprints,
+    dismiss: dismissSuggestions,
     restore: (fingerprints) => useProjectStore.getState().restoreSuggestions(fingerprints),
     dismissedFingerprints,
     modalTitle: "Grouping suggestions",
   };
-}
-
-function dismissFingerprints(fingerprints: readonly string[]): void {
-  const { dismissSuggestion } = useProjectStore.getState();
-  for (const fingerprint of fingerprints) dismissSuggestion(fingerprint);
-}
-
-function groupSections(sections: readonly RepeatingSection[]): number {
-  const { duration } = useAudioStore.getState();
-  const { groupRepeatingSections } = useProjectStore.getState();
-  const outcomes = sections.map((section) => groupRepeatingSections(section.starts, section.length, { duration }));
-  showKeptOwnTimingToast(
-    outcomes.flatMap((outcome) => outcome.keptOwnTiming),
-    "edit",
-  );
-  return outcomes.reduce((sum, outcome) => sum + outcome.replaced.length, 0);
-}
-
-function acceptOne(section: RepeatingSection): void {
-  const replaced = groupSections([section]);
-  if (replaced > 0) showGroupActionToast(replacedOwnTimingNote(replaced));
 }
 
 const BlockPreview: React.FC<{ lines: string[] }> = ({ lines }) => {

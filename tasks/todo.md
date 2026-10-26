@@ -2,7 +2,7 @@
 
 See `tasks/plan.md` and `SPEC.md`.
 
-- [ ] T1: Extract shared grouping-suggestions hook (refactor)
+- [x] T1: Extract shared grouping-suggestions hook (refactor)
   - Acceptance: `useVisibleGroupingSuggestions`, `acceptSuggestion` and `dismissSuggestions` live in
     `src/views/grouping/use-grouping-suggestions.ts`; `useGroupingNotice` uses them; notice behavior unchanged.
   - Verify: `pnpm typecheck`; `pnpm test:component` (existing `edit.grouping` and `use-grouping-notice` tests green).
