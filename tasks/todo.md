@@ -37,9 +37,16 @@ See `tasks/plan.md` and `SPEC.md`.
   - Files: `src/views/edit/preview-group-header.tsx`, `src/views/edit/preview-rows.tsx`,
     `src/views/edit.grouping.browser.test.tsx`
 
-- [ ] T6: Gates and manual check
+- [x] T6: Gates and manual check
   - Acceptance: every SPEC success criterion is checked off.
   - Verify: `pnpm typecheck && pnpm test:unit && pnpm test:component && pnpm jscpd && pnpm lint:fix && pnpm knip`;
     in `pnpm dev`: ghosts match the notice, dismiss and restore round-trip, rubber-band drag next to ghost
     headers, rename in both the preview and the timeline; `graphify update .`
   - Files: none expected
+
+## Build notes (2026-10-26)
+
+- Browser suite: 252/252 files pass. Unit suite: 439/440; the one failure is the `frame-loop-ownership`
+  guard on `src/views/edit/use-rubber-band-select.ts` (pre-existing WIP, raw `requestAnimationFrame`).
+- Unit tests need `NODE_OPTIONS=--no-experimental-webstorage` on Node 26 (repo targets Node 24).
+- Visual check done via a throwaway browser-test screenshot; timeline rename not yet checked by hand.
