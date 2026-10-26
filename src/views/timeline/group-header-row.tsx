@@ -1,35 +1,9 @@
 import type { LinkGroup } from "@/domain/group/template";
 import { useProjectStore } from "@/stores/project";
-import { focusAndSelectOnMount } from "@/utils/focus-and-select-on-mount";
+import { RenameInput } from "@/ui/rename-input";
 import { GroupBanner } from "@/views/timeline/group-banner";
 import { useTimelineStore } from "@/views/timeline/timeline-store";
-import { memo, useCallback, useState } from "react";
-
-const RenameInput: React.FC<{
-  initialValue: string;
-  onCommit: (next: string) => void;
-  onCancel: () => void;
-}> = ({ initialValue, onCommit, onCancel }) => {
-  const [value, setValue] = useState(() => initialValue);
-  return (
-    <input
-      ref={focusAndSelectOnMount}
-      type="text"
-      aria-label="Group name"
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") onCommit(value);
-        else if (e.key === "Escape") onCancel();
-        e.stopPropagation();
-      }}
-      onBlur={() => onCommit(value)}
-      onClick={(e) => e.stopPropagation()}
-      onDoubleClick={(e) => e.stopPropagation()}
-      className="w-full bg-transparent text-[10px] font-semibold text-composer-text text-center leading-none focus:outline-none px-0"
-    />
-  );
-};
+import { memo, useCallback } from "react";
 
 // -- Types ---------------------------------------------------------------------
 
@@ -136,7 +110,13 @@ const GroupHeaderRowComponent: React.FC<GroupHeaderRowProps> = ({
         }}
       >
         {renaming ? (
-          <RenameInput initialValue={group.label} onCommit={commitRename} onCancel={cancelRename} />
+          <RenameInput
+            initialValue={group.label}
+            onCommit={commitRename}
+            onCancel={cancelRename}
+            ariaLabel="Group name"
+            className="w-full text-[10px] text-center leading-none"
+          />
         ) : (
           <button
             type="button"

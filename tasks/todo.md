@@ -24,7 +24,7 @@ See `tasks/plan.md` and `SPEC.md`.
     variant moved from `line-preview.tsx`), `src/views/edit/line-preview.tsx`, `src/views/grouping/ghost-runs.ts`
     (new, pure lineId mapping), `src/views/edit.grouping.browser.test.tsx`
 
-- [ ] T4: Move `RenameInput` to a shared primitive (refactor)
+- [x] T4: Move `RenameInput` to a shared primitive (refactor)
   - Acceptance: `src/ui/rename-input.tsx` exports `RenameInput` with a `className` prop; the timeline header
     imports it; timeline rename unchanged.
   - Verify: `pnpm typecheck`; `pnpm knip`; manual double-click rename in the timeline.
