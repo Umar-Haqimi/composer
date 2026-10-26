@@ -1,3 +1,5 @@
+import { isMac } from "@/utils/platform";
+
 // -- Types --------------------------------------------------------------------
 
 interface ShortcutBinding {
@@ -17,6 +19,7 @@ interface ShortcutDefinition {
   description: string;
   defaultBinding: ShortcutBinding;
   repeatable?: true;
+  needsCommandKey?: true;
 }
 
 // -- Registry -----------------------------------------------------------------
@@ -29,10 +32,83 @@ const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     defaultBinding: { key: "Enter" },
   },
   {
+    id: "global.playPauseWhileTyping",
+    scope: "global",
+    description: "Play / Pause (works while typing)",
+    defaultBinding: { key: "Enter", mod: true },
+    needsCommandKey: true,
+  },
+  {
+    id: "global.seekBackward",
+    scope: "global",
+    description: "Seek back",
+    defaultBinding: { key: "<", shift: true },
+    repeatable: true,
+  },
+  {
+    id: "global.seekForward",
+    scope: "global",
+    description: "Seek forward",
+    defaultBinding: { key: ">", shift: true },
+    repeatable: true,
+  },
+  {
+    id: "global.seekBackwardWhileTyping",
+    scope: "global",
+    description: "Seek back (works while typing)",
+    defaultBinding: { key: "<", shift: true, mod: true },
+    repeatable: true,
+    needsCommandKey: true,
+  },
+  {
+    id: "global.seekForwardWhileTyping",
+    scope: "global",
+    description: "Seek forward (works while typing)",
+    defaultBinding: { key: ">", shift: true, mod: true },
+    repeatable: true,
+    needsCommandKey: true,
+  },
+  {
+    id: "global.seekBackwardFine",
+    scope: "global",
+    description: "Fine seek back",
+    defaultBinding: { key: "<", shift: true, alt: true },
+    repeatable: true,
+  },
+  {
+    id: "global.seekForwardFine",
+    scope: "global",
+    description: "Fine seek forward",
+    defaultBinding: { key: ">", shift: true, alt: true },
+    repeatable: true,
+  },
+  {
+    id: "global.seekBackwardFineWhileTyping",
+    scope: "global",
+    description: "Fine seek back (works while typing)",
+    defaultBinding: { key: "<", shift: true, alt: true, mod: true },
+    repeatable: true,
+    needsCommandKey: true,
+  },
+  {
+    id: "global.seekForwardFineWhileTyping",
+    scope: "global",
+    description: "Fine seek forward (works while typing)",
+    defaultBinding: { key: ">", shift: true, alt: true, mod: true },
+    repeatable: true,
+    needsCommandKey: true,
+  },
+  {
     id: "global.togglePlaybackSpeed",
     scope: "global",
     description: "Switch between normal speed and the last speed you used (0.75x at first)",
     defaultBinding: { key: "r", shift: true },
+  },
+  {
+    id: "global.toggleStem",
+    scope: "global",
+    description: "Switch between the original audio and the last stem you used (vocals at first)",
+    defaultBinding: { key: "o", shift: true },
   },
   {
     id: "global.help",
@@ -112,6 +188,34 @@ const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     description: "Save now",
     defaultBinding: { key: "s", mod: true },
   },
+  {
+    id: "global.toggleLoop",
+    scope: "global",
+    description: "Loop the playback range",
+    defaultBinding: { key: "l", shift: true },
+  },
+  {
+    id: "global.undo",
+    scope: "global",
+    description: "Undo",
+    defaultBinding: { key: "z", mod: true },
+  },
+  {
+    id: "global.redo",
+    scope: "global",
+    description: "Redo",
+    defaultBinding: { key: "z", mod: true, shift: true },
+  },
+  ...(isMac
+    ? []
+    : [
+        {
+          id: "global.redoAlternate",
+          scope: "global" as const,
+          description: "Redo (alternate)",
+          defaultBinding: { key: "y", mod: true },
+        },
+      ]),
   {
     id: "library.focusSearch",
     scope: "library",
@@ -227,6 +331,18 @@ const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     defaultBinding: { key: "s", shift: true },
   },
   {
+    id: "timeline.deleteSelection",
+    scope: "timeline",
+    description: "Delete selected words",
+    defaultBinding: { key: "Backspace" },
+  },
+  {
+    id: "timeline.deleteSelectionAlternate",
+    scope: "timeline",
+    description: "Delete selected words (alternate)",
+    defaultBinding: { key: "Delete" },
+  },
+  {
     id: "timeline.mergeWords",
     scope: "timeline",
     description: "Merge words",
@@ -293,10 +409,10 @@ const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     defaultBinding: { key: "Escape" },
   },
   {
-    id: "timeline.toggleGroupLoop",
+    id: "timeline.playSelection",
     scope: "timeline",
-    description: "Loop the open group",
-    defaultBinding: { key: "l", shift: true },
+    description: "Play the selection",
+    defaultBinding: { key: "Enter", alt: true },
   },
   {
     id: "timeline.jumpPrevInstance",
@@ -375,6 +491,24 @@ const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     defaultBinding: { key: "t" },
   },
   {
+    id: "timeline.toggleBeatGrid",
+    scope: "timeline",
+    description: "Show or hide the beat grid",
+    defaultBinding: { key: "b" },
+  },
+  {
+    id: "timeline.toggleSpectrum",
+    scope: "timeline",
+    description: "Show spectrum",
+    defaultBinding: { key: "v" },
+  },
+  {
+    id: "timeline.togglePitchLine",
+    scope: "timeline",
+    description: "Pitch line",
+    defaultBinding: { key: "k" },
+  },
+  {
     id: "timeline.toggleRollingEdit",
     scope: "timeline",
     description: "Toggle rolling edit tool",
@@ -419,6 +553,52 @@ const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     description: "Jump to next snap point or onset",
     defaultBinding: { key: "ArrowRight", shift: true, alt: true },
     repeatable: true,
+  },
+  {
+    id: "timeline.jumpPrevBar",
+    scope: "timeline",
+    description: "Jump to previous bar",
+    defaultBinding: { key: "ArrowLeft", shift: true, mod: true },
+    repeatable: true,
+  },
+  {
+    id: "timeline.jumpNextBar",
+    scope: "timeline",
+    description: "Jump to next bar",
+    defaultBinding: { key: "ArrowRight", shift: true, mod: true },
+    repeatable: true,
+  },
+  {
+    id: "timeline.jumpPrevGridLine",
+    scope: "timeline",
+    description: "Jump to previous beat grid line",
+    defaultBinding: { key: "ArrowLeft", shift: true, mod: true, alt: true },
+    repeatable: true,
+  },
+  {
+    id: "timeline.jumpNextGridLine",
+    scope: "timeline",
+    description: "Jump to next beat grid line",
+    defaultBinding: { key: "ArrowRight", shift: true, mod: true, alt: true },
+    repeatable: true,
+  },
+  {
+    id: "timeline.copy",
+    scope: "timeline",
+    description: "Copy selected words",
+    defaultBinding: { key: "c", mod: true },
+  },
+  {
+    id: "timeline.cut",
+    scope: "timeline",
+    description: "Cut selected words",
+    defaultBinding: { key: "x", mod: true },
+  },
+  {
+    id: "timeline.paste",
+    scope: "timeline",
+    description: "Paste copied words",
+    defaultBinding: { key: "v", mod: true },
   },
 ];
 

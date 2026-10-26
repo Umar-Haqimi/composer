@@ -8,7 +8,7 @@ import {
   transliterationWordGroups,
   twoSpaceSeparatorRegions,
 } from "@/domain/language/transliteration-format";
-import type { LyricLine } from "@/domain/line/model";
+import { type LyricLine, reconcileLine } from "@/domain/line/model";
 import type { WordTiming } from "@/domain/word/timing";
 
 interface TransliterationAlignmentPlan {
@@ -186,7 +186,7 @@ function planTransliterationAlignment(words: WordTiming[], rawText: string): Tra
 
 function timedPrefixText(originalText: string, words: WordTiming[], text: string): string {
   const sourceCount = sourceWordCount(originalText);
-  const timedCount = timingLexicalWordGroups(words).length;
+  const timedCount = sourceWordCount(words.map((word) => word.text).join(""));
   if (timedCount >= sourceCount) return text;
   const groups = transliterationWordGroups(text);
   return groups.length === sourceCount ? groups.slice(0, timedCount).join("  ") : text;
@@ -242,10 +242,15 @@ function alignTrackToLine(line: LyricLine, track: TransliterationTrack): Partial
   };
 }
 
+function withAlignedWords(line: LyricLine): LyricLine {
+  return line.transliteration ? reconcileLine({ ...line, ...alignTrackToLine(line, line.transliteration) }) : line;
+}
+
 export {
   alignTrackToLine,
   mappedTransliteration,
   planTransliterationAlignment,
   validateTransliterationAlignment,
   withAlignedTransliteration,
+  withAlignedWords,
 };

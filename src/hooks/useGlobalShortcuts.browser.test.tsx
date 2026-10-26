@@ -2,9 +2,11 @@ import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { isCountingIn } from "@/lib/sync-count-in";
 import { useAudioStore } from "@/stores/audio";
 import { useProjectStore } from "@/stores/project";
+import { useSeparationStore } from "@/stores/separation";
 import { useSettingsStore } from "@/stores/settings";
 import { useShortcutBindingsStore } from "@/stores/shortcut-bindings";
 import { createAudioFile } from "@/test/audio-fixtures";
+import { isMac } from "@/utils/platform";
 import { render } from "@/test/render";
 import { describe, expect, it } from "vitest";
 import { renderHook } from "vitest-browser-react";
@@ -219,8 +221,17 @@ describe("useGlobalShortcuts · playback speed toggle", () => {
       expect(useAudioStore.getState().playbackRate).toBe(1.25);
     });
 
-    it("starts from a saved default speed other than normal", async () => {
-      useSettingsStore.setState({ defaultPlaybackRate: 0.6 });
+    it("starts from a remembered speed other than normal", async () => {
+      useSettingsStore.setState({ lastPlaybackRate: 0.6 });
+      useAudioStore.getState().reset();
+      useAudioStore.getState().setPlaybackRate(1);
+      await renderEditorShortcuts();
+      pressSpeedToggle();
+      expect(useAudioStore.getState().playbackRate).toBe(0.6);
+    });
+
+    it("starts from the default speed when the last speed is not remembered", async () => {
+      useSettingsStore.setState({ rememberPlaybackRate: false, defaultPlaybackRate: 0.6 });
       useAudioStore.getState().reset();
       useAudioStore.getState().setPlaybackRate(1);
       await renderEditorShortcuts();
@@ -240,5 +251,57 @@ describe("useGlobalShortcuts · playback speed toggle", () => {
       pressSpeedToggle();
       expect(useAudioStore.getState().playbackRate).toBe(0.5);
     });
+  });
+});
+
+describe("useGlobalShortcuts · stem toggle", () => {
+  async function renderEditorShortcuts() {
+    await renderHook(() =>
+      useGlobalShortcuts({ setActiveTab: () => {}, setHelpOpen: () => {}, setSettingsOpen: () => {} }),
+    );
+  }
+
+  it("switches between Original and Vocals on Shift+O", async () => {
+    useSeparationStore.setState({ availableStems: ["original", "vocals", "instrumental"], currentStem: "original" });
+    await renderEditorShortcuts();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "O", code: "KeyO", shiftKey: true, bubbles: true }));
+    expect(useSeparationStore.getState().currentStem).toBe("vocals");
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "O", code: "KeyO", shiftKey: true, bubbles: true }));
+    expect(useSeparationStore.getState().currentStem).toBe("original");
+  });
+
+  it("stays on Original before vocals are separated", async () => {
+    await renderEditorShortcuts();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "O", code: "KeyO", shiftKey: true, bubbles: true }));
+    expect(useSeparationStore.getState().currentStem).toBe("original");
+  });
+});
+
+describe("useGlobalShortcuts · play/pause while typing", () => {
+  it("plays and pauses on Mod+Enter from inside the lyrics box", async () => {
+    useAudioStore.setState({ source: { type: "file", file: createAudioFile() }, isPlaying: false });
+    useProjectStore.setState({ activeTab: "edit" });
+    await renderEditorShortcuts();
+    const textarea = document.createElement("textarea");
+    document.body.appendChild(textarea);
+    try {
+      textarea.focus();
+      const pressModEnter = () =>
+        textarea.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "Enter",
+            metaKey: isMac,
+            ctrlKey: !isMac,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+      pressModEnter();
+      expect(useAudioStore.getState().isPlaying).toBe(true);
+      pressModEnter();
+      expect(useAudioStore.getState().isPlaying).toBe(false);
+    } finally {
+      textarea.remove();
+    }
   });
 });

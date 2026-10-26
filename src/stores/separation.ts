@@ -19,7 +19,7 @@ import {
 import type { SeparationError, SeparationStatus, Stem } from "@/audio/separation/types";
 import { hasOnlyFiniteSamples } from "@/audio/separation/validate-channels";
 import type { SeparationWorker } from "@/audio/separation/worker-host";
-import { useAudioStore } from "@/stores/audio";
+import { playableFile, useAudioStore } from "@/stores/audio";
 import { runModelDownload } from "@/stores/separation-model-download";
 import { useSettingsStore } from "@/stores/settings";
 import { create } from "zustand";
@@ -29,6 +29,7 @@ interface SeparationState {
   progress: { loaded: number; total: number };
   error: SeparationError | null;
   currentStem: Stem;
+  otherStem: Exclude<Stem, "original">;
   availableStems: Stem[];
   modelCached: boolean;
   jobKey: string | null;
@@ -72,6 +73,7 @@ const useSeparationStore = create<SeparationState & SeparationActions>((set, get
   progress: { loaded: 0, total: 0 },
   error: null,
   currentStem: "original",
+  otherStem: "vocals",
   availableStems: ["original"],
   modelCached: false,
   jobKey: null,
@@ -93,12 +95,14 @@ const useSeparationStore = create<SeparationState & SeparationActions>((set, get
     endSeparationRun();
     revokeUrls(get().stemUrls);
     const source = useAudioStore.getState().source;
-    const file = source?.type === "file" ? source.file : source?.type === "youtube" ? source.file : null;
+    const file = playableFile(source);
     if (!file) {
       set({ jobKey: null, availableStems: ["original"], stemUrls: {}, currentStem: "original", status: "idle" });
       return;
     }
     const variant = useSettingsStore.getState().vocalModelVariant;
+    // Until the new file is hashed, the previous job must not be read or written as this song's.
+    set({ jobKey: null });
     const audioHash = await hashFile(file);
     const jobKey = stemJobKey(audioHash, variant);
 
@@ -150,7 +154,7 @@ const useSeparationStore = create<SeparationState & SeparationActions>((set, get
       return;
     }
     const source = useAudioStore.getState().source;
-    const file = source?.type === "file" ? source.file : source?.type === "youtube" ? source.file : null;
+    const file = playableFile(source);
     if (!file) return;
 
     isCancelling = false;
@@ -235,7 +239,7 @@ const useSeparationStore = create<SeparationState & SeparationActions>((set, get
   selectStem: (stem) => {
     const available = get().availableStems;
     if (!available.includes(stem)) return;
-    set({ currentStem: stem });
+    set(stem === "original" ? { currentStem: stem } : { currentStem: stem, otherStem: stem });
   },
 
   // Called once at boot by usePersistence to seed currentStem from the saved
@@ -245,7 +249,7 @@ const useSeparationStore = create<SeparationState & SeparationActions>((set, get
   // been populated yet. refreshForCurrentSource handles eviction by overwriting
   // back to "original" when the cached stems are gone.
   restoreCurrentStem: (stem) => {
-    set({ currentStem: stem });
+    set(stem === "original" ? { currentStem: stem } : { currentStem: stem, otherStem: stem });
   },
 
   cancel: () => {
@@ -269,6 +273,7 @@ const useSeparationStore = create<SeparationState & SeparationActions>((set, get
       progress: { loaded: 0, total: 0 },
       error: null,
       currentStem: "original",
+      otherStem: "vocals",
       availableStems: ["original"],
       jobKey: null,
       stemUrls: {},
@@ -276,8 +281,13 @@ const useSeparationStore = create<SeparationState & SeparationActions>((set, get
   },
 }));
 
+function toggledStem(): Stem {
+  const { currentStem, otherStem } = useSeparationStore.getState();
+  return currentStem === "original" ? otherStem : "original";
+}
+
 function isStemJobInUse(jobKey: string): boolean {
   return jobKey === useSeparationStore.getState().jobKey || isStemJobLoading(jobKey);
 }
 
-export { useSeparationStore, isStemJobInUse };
+export { useSeparationStore, isStemJobInUse, toggledStem };

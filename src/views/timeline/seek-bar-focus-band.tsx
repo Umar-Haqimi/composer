@@ -4,6 +4,8 @@ import type { Bounds } from "@/domain/word/bounds";
 import { useProjectStore } from "@/stores/project";
 import { useEffectiveFocus, useEffectiveFocusGroup } from "@/views/timeline/effective-focus";
 import { instanceSpan } from "@/views/timeline/group-focus";
+import { shownLoopRegion, useTimelineStore } from "@/views/timeline/timeline-store";
+import { useSelectionPlaybackRange } from "@/views/timeline/use-selection-playback-range";
 import { useMemo } from "react";
 
 // -- Interfaces ----------------------------------------------------------------
@@ -56,7 +58,13 @@ const SeekBarFocusBand: React.FC<SeekBarFocusBandProps> = ({ duration }) => {
   const group = useEffectiveFocusGroup();
   const lines = useProjectStore((s) => s.lines);
   const onTimeline = useProjectStore((s) => s.activeTab === "timeline");
+  const selectionPlayback = useSelectionPlaybackRange();
+  const loopRegion = useTimelineStore(shownLoopRegion);
   const spans = useMemo(() => (group ? instanceSpans(lines, group.id) : []), [lines, group]);
+  const heard = loopRegion ?? selectionPlayback?.range ?? null;
+  if (heard && onTimeline && duration > 0) {
+    return <Band kind="heard" span={heard} duration={duration} color="var(--color-composer-accent)" />;
+  }
   if (!focus || !group || !onTimeline || duration <= 0) return null;
 
   return spans.map(({ instanceIdx, span }) => (

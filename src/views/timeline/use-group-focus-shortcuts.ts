@@ -5,7 +5,6 @@ import { findMatchingShortcut } from "@/utils/shortcut-matcher";
 import { currentEffectiveFocus } from "@/views/timeline/effective-focus";
 import { type InstanceRef, selectedBannerInstance } from "@/views/timeline/selected-banner";
 import { useTimelineStore } from "@/views/timeline/timeline-store";
-import { toggleGroupLoop } from "@/views/timeline/toggle-group-loop";
 import { useEffect } from "react";
 
 // -- Helpers -------------------------------------------------------------------
@@ -20,9 +19,11 @@ function focusedBannerInstance(target: EventTarget | null): InstanceRef | null {
 }
 
 function escapeBelongsElsewhere(target: EventTarget | null): boolean {
-  const { contextMenu, editingWord, renamingGroupId, pasteMode, selectedWords } = useTimelineStore.getState();
+  const { contextMenu, editingWord, renamingGroupId, pasteMode, selectedWords, loopRegion, loopRegionDrag } =
+    useTimelineStore.getState();
   if (contextMenu || editingWord || renamingGroupId !== null) return true;
   if (pasteMode.status !== "idle" || selectedWords.length > 0) return true;
+  if (loopRegion !== null || loopRegionDrag !== null) return true;
   if (document.querySelector('[data-word-block][aria-pressed="true"]') !== null) return true;
   return target instanceof Element && target.closest("[data-floating-ui-portal]") !== null;
 }
@@ -43,12 +44,6 @@ function handleGroupFocusKeyDown(event: KeyboardEvent): void {
     event.preventDefault();
     event.stopImmediatePropagation();
     timeline.openGroup(instance.groupId, instance.instanceIdx);
-    return;
-  }
-
-  if (matched === "timeline.toggleGroupLoop" && focus !== null) {
-    event.preventDefault();
-    toggleGroupLoop();
     return;
   }
 

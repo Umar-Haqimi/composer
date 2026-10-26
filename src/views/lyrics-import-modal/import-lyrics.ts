@@ -15,6 +15,8 @@ import { PARSERS, parseLyricsFile } from "@/utils/lyrics-parsers";
 import {
   type ParseIssue,
   type ParseResult,
+  UNSUPPORTED_LRC_TAGS_MESSAGE,
+  hasUnsupportedTags,
   skippedLineCount,
   skippedLinesMessage,
 } from "@/utils/lyrics-parsers/shared";
@@ -42,7 +44,7 @@ interface ImportContext {
   onResult?: (parsed: ParseResult, source: ImportSourceInfo) => void;
 }
 
-type TtmlLyricsRead = { status: "readable"; parsed: ParseResult } | { status: "unreadable"; message: string };
+type LyricsRead = { status: "readable"; parsed: ParseResult } | { status: "unreadable"; message: string };
 
 interface ImportLyricsInput {
   filename: string;
@@ -55,6 +57,7 @@ interface ImportLyricsInput {
 
 function noLyricsMessage(filename: string, issues: ParseIssue[]): string {
   if (issues.some((issue) => issue.reason === "empty-document")) return `Could not read ${filename}.`;
+  if (hasUnsupportedTags(issues)) return `Could not import ${filename}. ${UNSUPPORTED_LRC_TAGS_MESSAGE}`;
   const skipped = skippedLineCount(issues);
   if (skipped === 0) return `No lyrics found in ${filename}.`;
   return `No lyrics could be read from ${filename}. ${skippedLinesMessage(skipped)}`;
@@ -136,13 +139,20 @@ async function importLyrics(input: ImportLyricsInput, ctx: ImportContext): Promi
   return true;
 }
 
-function readTtmlLyrics(content: string, sourceName: string, audioDuration: number): TtmlLyricsRead {
-  const parsed = PARSERS.ttml(content, audioDuration > 0 ? audioDuration : undefined);
+function readParsedLyrics(parsed: ParseResult, sourceName: string): LyricsRead {
   if (parsed.lines.length === 0) return { status: "unreadable", message: noLyricsMessage(sourceName, parsed.issues) };
   return { status: "readable", parsed };
 }
 
-function replaceWithTtmlLyrics(parsed: ParseResult): number {
+function readTtmlLyrics(content: string, sourceName: string, audioDuration: number): LyricsRead {
+  return readParsedLyrics(PARSERS.ttml(content, audioDuration > 0 ? audioDuration : undefined), sourceName);
+}
+
+function readLyricsFile(fileName: string, content: string): LyricsRead {
+  return readParsedLyrics(parseLyricsFile(fileName, content, undefined), fileName);
+}
+
+function replaceWithParsedLyrics(parsed: ParseResult): number {
   replaceLyrics(parsed);
   return skippedLineCount(parsed.issues);
 }
@@ -196,5 +206,5 @@ function useImportContext(sourceLabel: string): ImportContext {
 
 // -- Exports ------------------------------------------------------------------
 
-export { importLyrics, importProjectLyrics, readTtmlLyrics, replaceWithTtmlLyrics, useImportContext };
+export { importLyrics, importProjectLyrics, readLyricsFile, readTtmlLyrics, replaceWithParsedLyrics, useImportContext };
 export type { ImportContext, ImportSourceInfo };

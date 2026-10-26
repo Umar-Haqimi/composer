@@ -56,6 +56,9 @@ async function resetAllStores(): Promise<void> {
     followEnabled: settings.followPlayhead,
     previewSidebarOpen: false,
     selectedWords: [],
+    selectionPlayback: null,
+    loopRegion: null,
+    loopRegionDrag: null,
     clipboard: null,
     pasteMode: { status: "idle" },
     scrollLeft: 0,
@@ -80,6 +83,7 @@ async function resetAllStores(): Promise<void> {
     vocalOnsetSnapPoints: [],
     vocalOnsetDetectionStatus: "idle",
     vocalOnsetDetectionError: null,
+    pitchTrackGeneration: 0,
   });
 
   if (hasLocalStorage()) globalThis.localStorage.clear();

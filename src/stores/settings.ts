@@ -1,8 +1,12 @@
+import type { MusicBrainzLookup } from "@/domain/musicbrainz/lookup-mode";
+import { DEFAULT_PITCH_LINE_MODE, type PitchLineMode } from "@/domain/pitch/pitch-line-mode";
 import type { LibrarySort } from "@/domain/project/library-order";
 import type { LaunchScreen, LibraryView } from "@/domain/project/library-preferences";
+import { SPECTRUM_SETTING_DEFAULTS, type SpectrumSettings } from "@/domain/spectrum/settings";
 import type { KeepYouTubeAudio } from "@/domain/storage/audio-retention";
 import type { StorageLimit } from "@/domain/storage/storage-limit";
 import { SETTINGS_PERSIST_VERSION, migrateSettings } from "@/stores/settings-migration";
+import { SNAP_DEFAULTS, type SnapSettings } from "@/stores/settings-snap";
 import { DEFAULT_BRIDGE_URL } from "@/utils/composer-bridge-api";
 import { PREVIEW_SIDEBAR_WIDTH } from "@/utils/preview-sidebar-width";
 import { DEFAULT_MIN_WORD_DURATION } from "@/utils/word-spaces";
@@ -34,8 +38,11 @@ interface CobaltInstanceStatus {
 
 const DEFAULT_COBALT_INSTANCE_ID = "default";
 
-interface SettingsState {
+interface SettingsState extends SnapSettings, SpectrumSettings {
+  pitchLine: PitchLineMode;
   defaultPlaybackRate: number;
+  rememberPlaybackRate: boolean;
+  lastPlaybackRate: number;
   preservePitch: boolean;
   rememberVolume: boolean;
   lastVolume: number;
@@ -47,12 +54,8 @@ interface SettingsState {
   defaultRollingEdit: boolean;
   defaultPreviewSidebar: boolean;
   previewSidebarWidth: number;
-  timelineSnap: boolean;
-  timelineSnapThreshold: number;
-  vocalOnsetSnap: boolean;
   shareTimingInNewGroups: boolean;
   loopOpenGroup: boolean;
-  snapPlayheadToPoints: boolean;
   syllablesFollowRolling: boolean;
   timelineHorizontalScroll: boolean;
 
@@ -63,11 +66,15 @@ interface SettingsState {
   undoRewindDuration: number;
   undoContinuePlayback: boolean;
   autoRewindForBracketedLines: boolean;
+  selectionLeadIn: number;
   syncCountIn: number;
+  seekStep: number;
+  fineSeekStep: number;
   defaultGranularity: GranularityDefault;
 
   autoSaveDelay: number;
   keepYouTubeAudio: KeepYouTubeAudio;
+  musicBrainzLookup: MusicBrainzLookup;
   smartCleanup: boolean;
   storageLimit: StorageLimit;
 
@@ -119,7 +126,12 @@ interface SettingsActions {
 // -- Defaults -----------------------------------------------------------------
 
 const DEFAULTS: SettingsState = {
+  ...SPECTRUM_SETTING_DEFAULTS,
+  pitchLine: DEFAULT_PITCH_LINE_MODE,
+  ...SNAP_DEFAULTS,
   defaultPlaybackRate: 0.75,
+  rememberPlaybackRate: true,
+  lastPlaybackRate: 0.75,
   preservePitch: true,
   rememberVolume: true,
   lastVolume: 1,
@@ -131,12 +143,8 @@ const DEFAULTS: SettingsState = {
   defaultRollingEdit: false,
   defaultPreviewSidebar: false,
   previewSidebarWidth: PREVIEW_SIDEBAR_WIDTH.default,
-  timelineSnap: true,
-  timelineSnapThreshold: 12,
-  vocalOnsetSnap: true,
   shareTimingInNewGroups: true,
   loopOpenGroup: false,
-  snapPlayheadToPoints: true,
   syllablesFollowRolling: false,
   timelineHorizontalScroll: false,
 
@@ -147,11 +155,15 @@ const DEFAULTS: SettingsState = {
   undoRewindDuration: 3,
   undoContinuePlayback: true,
   autoRewindForBracketedLines: true,
+  selectionLeadIn: 0.3,
   syncCountIn: 3,
+  seekStep: 0.5,
+  fineSeekStep: 0.05,
   defaultGranularity: "word",
 
   autoSaveDelay: 2000,
   keepYouTubeAudio: "auto",
+  musicBrainzLookup: "auto",
   smartCleanup: true,
   storageLimit: "2gb",
 

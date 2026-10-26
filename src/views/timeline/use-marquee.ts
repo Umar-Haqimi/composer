@@ -1,11 +1,13 @@
+import { getEffectiveLines } from "@/domain/line/effective-words";
+import type { WordSelection } from "@/domain/selection/model";
+import { mergeWordSelections } from "@/domain/selection/set-ops";
 import { useFrameLoop } from "@/hooks/use-frame-loop";
 import { holdFrames } from "@/lib/frame-loop";
+import { swallowTrailingClick } from "@/lib/swallow-trailing-click";
 import { useProjectStore } from "@/stores/project";
 import { GROUP_HEADER_HEIGHT } from "@/views/timeline/group-header-row";
-import type { WordSelection } from "@/domain/selection/model";
-import { GUTTER_WIDTH, useTimelineStore, WAVEFORM_HEIGHT } from "@/views/timeline/timeline-store";
-import { getEffectiveLines } from "@/domain/line/effective-words";
-import { mergeWordSelections } from "@/domain/selection/set-ops";
+import { currentOverviewBandHeight } from "@/views/timeline/overview-band-height";
+import { GUTTER_WIDTH, useTimelineStore } from "@/views/timeline/timeline-store";
 import { computeRowLayout } from "@/views/timeline/utils";
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 
@@ -103,7 +105,7 @@ function useMarquee(scrollContainerRef: RefObject<HTMLDivElement | null>) {
       defaultRowHeight,
       collapsedInstances,
       focusedGroup,
-      waveformHeight: WAVEFORM_HEIGHT,
+      waveformHeight: currentOverviewBandHeight(),
       groupHeaderHeight: GROUP_HEADER_HEIGHT,
     });
 
@@ -154,7 +156,7 @@ function useMarquee(scrollContainerRef: RefObject<HTMLDivElement | null>) {
 
   const handleMarqueeMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      if (e.button !== 0) return;
+      if (e.button !== 0 || e.defaultPrevented) return;
 
       const target = e.target as HTMLElement;
       if (target.closest("[data-word-block]")) return;
@@ -200,6 +202,7 @@ function useMarquee(scrollContainerRef: RefObject<HTMLDivElement | null>) {
       setAutoScrolling(false);
 
       if (stateRef.current === "active") {
+        swallowTrailingClick();
         const rect = computeRect();
         if (rect) {
           const newSelections = computeSelection(rect);

@@ -1,7 +1,11 @@
+import type { ResumePosition } from "@/domain/project/resume-position";
+import type { LoopRegion } from "@/domain/selection/loop-region";
 import type { WordSelection } from "@/domain/selection/model";
 import { toggleWordSelection } from "@/domain/selection/set-ops";
+import type { Bounds } from "@/domain/word/bounds";
 import { useSettingsStore } from "@/stores/settings";
 import type { GroupFocus } from "@/views/timeline/group-focus";
+import type { LoupeTarget } from "@/views/timeline/loupe/loupe-target";
 import type { ClipboardData, PasteMode } from "@/views/timeline/selection-types";
 import { create } from "zustand";
 
@@ -30,16 +34,29 @@ interface EditingWord {
   type: "word" | "bg";
 }
 
+type SelectionPlaybackMode = "once" | "loop";
+
+interface LoopRegionDrag {
+  edge: "begin" | "end";
+  snappedTo: { kind: "pin" | "onset" | "beat"; label: string } | null;
+  draft: Bounds | null;
+}
+
 interface TimelineState {
   zoom: number;
   followEnabled: boolean;
   previewSidebarOpen: boolean;
   textVariant: "original" | "transliteration";
   selectedWords: WordSelection[];
+  selectionPlayback: SelectionPlaybackMode | null;
+  loopRegion: LoopRegion | null;
+  loopRegionDrag: LoopRegionDrag | null;
 
   clipboard: ClipboardData | null;
   pasteMode: PasteMode;
   scrollLeft: number;
+  scrollTop: number | null;
+  pendingResumeView: ResumePosition | null;
   rowHeights: Record<string, number>;
   defaultRowHeight: number;
   isDraggingPlayhead: boolean;
@@ -47,6 +64,7 @@ interface TimelineState {
   contextMenu: ContextMenuState | null;
   editingWord: EditingWord | null;
   rollingEditMode: boolean;
+  spectrumVisible: boolean;
   markerMode: boolean;
   hoveredSnapPointId: string | null;
   collapsedInstances: Record<string, boolean>;
@@ -62,6 +80,8 @@ interface TimelineState {
   vocalOnsetSnapPoints: number[];
   vocalOnsetDetectionStatus: "idle" | "processing" | "error";
   vocalOnsetDetectionError: string | null;
+  pitchTrackGeneration: number;
+  loupeTarget: LoupeTarget | null;
 }
 
 interface TimelineActions {
@@ -72,12 +92,17 @@ interface TimelineActions {
   togglePreviewSidebar: () => void;
   toggleTextVariant: () => void;
   setSelectedWords: (selections: WordSelection[]) => void;
+  setSelectionPlayback: (mode: SelectionPlaybackMode | null) => void;
+  setLoopRegion: (region: LoopRegion | null) => void;
+  setLoopRegionDrag: (drag: LoopRegionDrag | null) => void;
 
   toggleSelection: (selection: WordSelection) => void;
   clearSelection: () => void;
   setClipboard: (clipboard: ClipboardData | null) => void;
   setPasteMode: (mode: PasteMode) => void;
   setScrollLeft: (scrollLeft: number) => void;
+  setScrollTop: (scrollTop: number) => void;
+  setPendingResumeView: (view: ResumePosition | null) => void;
   setRowHeight: (lineId: string, height: number) => void;
   setDraggingPlayhead: (isDragging: boolean, time?: number) => void;
   setDragTime: (time: number) => void;
@@ -87,6 +112,7 @@ interface TimelineActions {
   clearEditingWord: () => void;
   resetProjectScope: () => void;
   toggleRollingEditMode: () => void;
+  toggleSpectrum: () => void;
   toggleMarkerMode: () => void;
   setHoveredSnapPointId: (id: string | null) => void;
   setInstanceCollapsed: (key: string, isCollapsed: boolean) => void;
@@ -102,6 +128,8 @@ interface TimelineActions {
   setSnappedAnchorTime: (t: number | null) => void;
   setVocalOnsetSnapPoints: (points: number[]) => void;
   setVocalOnsetDetectionStatus: (status: "idle" | "processing" | "error", error?: string | null) => void;
+  setPitchTrackGeneration: (generation: number) => void;
+  setLoupeTarget: (target: LoupeTarget | null) => void;
 }
 
 // -- Constants -----------------------------------------------------------------
@@ -124,10 +152,15 @@ const useTimelineStore = create<TimelineState & TimelineActions>((set, get) => {
     previewSidebarOpen: settings.defaultPreviewSidebar,
     textVariant: "original",
     selectedWords: [],
+    selectionPlayback: null,
+    loopRegion: null,
+    loopRegionDrag: null,
 
     clipboard: null,
     pasteMode: { status: "idle" },
     scrollLeft: 0,
+    scrollTop: null,
+    pendingResumeView: null,
     rowHeights: {},
     defaultRowHeight: settings.defaultRowHeight,
     isDraggingPlayhead: false,
@@ -135,6 +168,7 @@ const useTimelineStore = create<TimelineState & TimelineActions>((set, get) => {
     contextMenu: null,
     editingWord: null,
     rollingEditMode: settings.defaultRollingEdit,
+    spectrumVisible: settings.showSpectrum,
     markerMode: false,
     hoveredSnapPointId: null,
     collapsedInstances: {},
@@ -150,6 +184,8 @@ const useTimelineStore = create<TimelineState & TimelineActions>((set, get) => {
     vocalOnsetSnapPoints: [],
     vocalOnsetDetectionStatus: "idle",
     vocalOnsetDetectionError: null,
+    pitchTrackGeneration: 0,
+    loupeTarget: null,
 
     setZoom: (zoom) => set({ zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom)) }),
     zoomIn: () => set((s) => ({ zoom: Math.min(MAX_ZOOM, s.zoom + ZOOM_STEP) })),
@@ -158,13 +194,21 @@ const useTimelineStore = create<TimelineState & TimelineActions>((set, get) => {
     togglePreviewSidebar: () => set((s) => ({ previewSidebarOpen: !s.previewSidebarOpen })),
     toggleTextVariant: () =>
       set((s) => ({ textVariant: s.textVariant === "original" ? "transliteration" : "original" })),
-    setSelectedWords: (selectedWords) => set({ selectedWords }),
+    setSelectedWords: (selectedWords) =>
+      set(selectedWords.length > 0 ? { selectedWords, loopRegion: null } : { selectedWords }),
+    setSelectionPlayback: (selectionPlayback) => set({ selectionPlayback }),
+    setLoopRegion: (loopRegion) =>
+      set((s) => (loopRegion && s.selectedWords.length > 0 ? { loopRegion, selectedWords: [] } : { loopRegion })),
+    setLoopRegionDrag: (loopRegionDrag) => set({ loopRegionDrag }),
 
-    toggleSelection: (selection) => set((s) => ({ selectedWords: toggleWordSelection(s.selectedWords, selection) })),
+    toggleSelection: (selection) =>
+      set((s) => ({ selectedWords: toggleWordSelection(s.selectedWords, selection), loopRegion: null })),
     clearSelection: () => set({ selectedWords: [] }),
     setClipboard: (clipboard) => set({ clipboard }),
     setPasteMode: (pasteMode) => set({ pasteMode }),
     setScrollLeft: (scrollLeft) => set({ scrollLeft }),
+    setScrollTop: (scrollTop) => set({ scrollTop }),
+    setPendingResumeView: (pendingResumeView) => set({ pendingResumeView }),
     setRowHeight: (lineId, height) =>
       set((s) => ({
         rowHeights: {
@@ -181,13 +225,19 @@ const useTimelineStore = create<TimelineState & TimelineActions>((set, get) => {
     resetProjectScope: () =>
       set({
         selectedWords: [],
+        selectionPlayback: null,
+        loopRegion: null,
+        loopRegionDrag: null,
         contextMenu: null,
         editingWord: null,
         pasteMode: { status: "idle" },
         scrollLeft: 0,
+        scrollTop: null,
+        pendingResumeView: null,
         focusedGroup: null,
       }),
     toggleRollingEditMode: () => set((s) => ({ rollingEditMode: !s.rollingEditMode })),
+    toggleSpectrum: () => set((s) => ({ spectrumVisible: !s.spectrumVisible })),
     toggleMarkerMode: () => set((s) => ({ markerMode: !s.markerMode })),
     setHoveredSnapPointId: (hoveredSnapPointId) => set({ hoveredSnapPointId }),
     setInstanceCollapsed: (key, isCollapsed) =>
@@ -216,10 +266,19 @@ const useTimelineStore = create<TimelineState & TimelineActions>((set, get) => {
       }),
     setVocalOnsetDetectionStatus: (vocalOnsetDetectionStatus, error = null) =>
       set({ vocalOnsetDetectionStatus, vocalOnsetDetectionError: error }),
+    setPitchTrackGeneration: (pitchTrackGeneration) => set({ pitchTrackGeneration }),
+    setLoupeTarget: (loupeTarget) => set({ loupeTarget }),
   };
 });
 
+// -- Functions -----------------------------------------------------------------
+
+// A region being drawn shows before it replaces the current one on release.
+function shownLoopRegion(state: TimelineState): Bounds | null {
+  return state.loopRegionDrag?.draft ?? state.loopRegion;
+}
+
 // -- Exports -------------------------------------------------------------------
 
-export { useTimelineStore, GUTTER_WIDTH, WAVEFORM_HEIGHT, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP };
-export type { ContextMenuState, ContextMenuTarget, TrackHit };
+export { shownLoopRegion, useTimelineStore, GUTTER_WIDTH, WAVEFORM_HEIGHT, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP };
+export type { ContextMenuTarget, LoopRegionDrag, SelectionPlaybackMode, TrackHit };

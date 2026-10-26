@@ -1,7 +1,7 @@
-import { reconcileLine, type LooseLine, type LyricLine } from "@/domain/line/model";
-import { describe, expect, it } from "vitest";
+import { type LooseLine, type LyricLine, reconcileLine } from "@/domain/line/model";
 import { hasAnyTiming, hasMainLyrics, isBracketedLine, isLineSynced, isWordSynced } from "@/domain/line/predicates";
 import { createLine } from "@/test/factories";
+import { describe, expect, it } from "vitest";
 
 // -- Helpers ------------------------------------------------------------------
 

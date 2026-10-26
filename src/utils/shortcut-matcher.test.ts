@@ -9,6 +9,8 @@ import {
 } from "@/utils/shortcut-matcher";
 import { describe, expect, it } from "vitest";
 
+const MOD = { metaKey: isMac, ctrlKey: !isMac };
+
 function keydown(init: KeyboardEventInit): KeyboardEvent {
   return new KeyboardEvent("keydown", { bubbles: true, ...init });
 }
@@ -32,6 +34,12 @@ describe("findMatchingShortcut", () => {
   });
 
   describe("regressions", () => {
+    it("regression: a global shortcut saved on Mod+Z still wins over the default undo", () => {
+      useShortcutBindingsStore.setState({ overrides: { "global.goToEdit": { key: "z", mod: true } } });
+
+      expect(findMatchingShortcut(keydown({ key: "z", ...MOD }), "global")).toBe("global.goToEdit");
+    });
+
     it("regression: a held toggle key does not re-fire the toggle on every auto-repeat", () => {
       expect(findMatchingShortcut(keydown({ key: "r", repeat: true }), "timeline")).toBeNull();
     });
@@ -62,7 +70,7 @@ describe("findMatchingShortcut", () => {
     it("only nudges and jumps opt into auto-repeat", () => {
       const repeatable = SHORTCUT_DEFINITIONS.filter((definition) => definition.repeatable).map(({ id }) => id);
       for (const id of repeatable) {
-        expect(id).toMatch(/\.(nudge|jump)/);
+        expect(id).toMatch(/\.(nudge|jump|seek)/);
       }
       expect(repeatable).toContain("timeline.nudgeLeft");
       expect(repeatable).toContain("timeline.nudgeRight");
@@ -93,6 +101,41 @@ describe("matchesShortcutBinding", () => {
       assignBinding("global.saveNow", { key: "k", mod: true, shift: true });
       expect(matchesShortcutBinding(modS(), "global.saveNow")).toBe(false);
       expect(matchesShortcutBinding(modS({ key: "k", code: "KeyK", shiftKey: true }), "global.saveNow")).toBe(true);
+    });
+  });
+
+  describe("undo and redo", () => {
+    it("matches a key press to the shortcut's effective binding", () => {
+      expect(matchesShortcutBinding(keydown({ key: "z", ...MOD }), "global.undo")).toBe(true);
+    });
+
+    it("matches a held repeat that findMatchingShortcut ignores, so handlers can consume it", () => {
+      const held = keydown({ key: "z", ...MOD, repeat: true });
+
+      expect(matchesShortcutBinding(held, "global.undo")).toBe(true);
+      expect(findMatchingShortcut(held, "global")).toBeNull();
+    });
+
+    it("follows a remapped binding instead of the default", () => {
+      useShortcutBindingsStore.setState({ overrides: { "global.undo": { key: "b", mod: true } } });
+
+      expect(matchesShortcutBinding(keydown({ key: "b", ...MOD }), "global.undo")).toBe(true);
+      expect(matchesShortcutBinding(keydown({ key: "z", ...MOD }), "global.undo")).toBe(false);
+    });
+
+    describe("edge cases", () => {
+      it("never matches an unbound shortcut", () => {
+        useShortcutBindingsStore.setState({ overrides: { "global.undo": { key: "" } } });
+
+        expect(matchesShortcutBinding(keydown({ key: "z", ...MOD }), "global.undo")).toBe(false);
+      });
+
+      it("tells undo from redo by Shift", () => {
+        const redo = keydown({ key: "Z", ...MOD, shiftKey: true });
+
+        expect(matchesShortcutBinding(redo, "global.undo")).toBe(false);
+        expect(matchesShortcutBinding(redo, "global.redo")).toBe(true);
+      });
     });
   });
 });
@@ -131,6 +174,17 @@ describe("bindingFromKeyboardEvent", () => {
       });
     });
 
+    it("regression: macOS Alt+Shift+, records and matches the physical key, not the glyph", () => {
+      const event = keydown({ key: "\u00af", code: "Comma", altKey: true, shiftKey: true });
+      expect(bindingFromKeyboardEvent(event)).toEqual({ key: "<", shift: true, alt: true });
+      expect(findMatchingShortcut(event, "global")).toBe("global.seekBackwardFine");
+    });
+
+    it("regression: macOS Cmd+Alt+Shift+. matches the fine typing seek", () => {
+      const event = keydown({ key: "\u02d8", code: "Period", altKey: true, shiftKey: true, ...MOD });
+      expect(findMatchingShortcut(event, "global")).toBe("global.seekForwardFineWhileTyping");
+    });
+
     it("regression: a recorded macOS Alt binding matches the same key press", () => {
       const event = keydown({ key: "\u00b4", code: "KeyE", altKey: true });
       const binding = bindingFromKeyboardEvent(event);
@@ -159,6 +213,84 @@ describe("isReservedBrowserShortcut", () => {
   describe("regressions", () => {
     it("regression: never flags Mod+S, which the app owns for saving", () => {
       expect(isReservedBrowserShortcut({ key: "s", mod: true })).toBe(false);
+    });
+  });
+});
+
+describe("keyboard layouts", () => {
+  describe("happy paths", () => {
+    it("matches a letter shortcut typed on a Russian layout by its physical key", () => {
+      expect(findMatchingShortcut(keydown({ key: "р", code: "KeyR" }), "timeline")).toBe("timeline.toggleRollingEdit");
+    });
+
+    it("matches a shifted letter shortcut on a Russian layout", () => {
+      expect(findMatchingShortcut(keydown({ key: "У", code: "KeyE", shiftKey: true }), "timeline")).toBe(
+        "timeline.toggleExplicit",
+      );
+    });
+
+    it("matches undo on a Russian layout", () => {
+      expect(matchesShortcutBinding(keydown({ key: "я", code: "KeyZ", ...MOD }), "global.undo")).toBe(true);
+    });
+
+    it("records the Latin key for a Cyrillic letter", () => {
+      expect(bindingFromKeyboardEvent(keydown({ key: "Р", code: "KeyH", shiftKey: true }))).toEqual({
+        key: "h",
+        shift: true,
+      });
+    });
+
+    it("records punctuation from a key that carries a Cyrillic letter", () => {
+      expect(bindingFromKeyboardEvent(keydown({ key: "х", code: "BracketLeft" }))).toEqual({ key: "[" });
+    });
+  });
+
+  describe("edge cases", () => {
+    it("uses the US shifted character for shifted punctuation on a Cyrillic key", () => {
+      expect(bindingFromKeyboardEvent(keydown({ key: "Х", code: "BracketLeft", shiftKey: true }))).toEqual({
+        key: "{",
+        shift: true,
+      });
+    });
+
+    it("keeps a non-letter glyph such as the numero sign", () => {
+      expect(bindingFromKeyboardEvent(keydown({ key: "№", code: "Digit3", shiftKey: true }))).toEqual({
+        key: "№",
+        shift: true,
+      });
+    });
+
+    it("keeps the printed key on a Latin layout such as AZERTY", () => {
+      expect(bindingFromKeyboardEvent(keydown({ key: "a", code: "KeyQ" }))).toEqual({ key: "a" });
+    });
+
+    it("keeps accented Latin letters such as German ü", () => {
+      expect(bindingFromKeyboardEvent(keydown({ key: "ü", code: "BracketLeft" }))).toEqual({ key: "ü" });
+    });
+
+    it("regression: a saved accented Latin binding still matches", () => {
+      useShortcutBindingsStore.setState({ overrides: { "global.help": { key: "é" } } });
+      expect(matchesShortcutBinding(keydown({ key: "é", code: "Digit2" }), "global.help")).toBe(true);
+    });
+
+    it("keeps a non-ASCII glyph when the physical key has no US mapping", () => {
+      expect(bindingFromKeyboardEvent(keydown({ key: "ß", code: "IntlBackslash" }))).toEqual({ key: "ß" });
+    });
+
+    it("reads the shifted character when the browser reports the unshifted one with Mod+Shift held", () => {
+      const event = keydown({ key: ",", code: "Comma", shiftKey: true, ...MOD });
+      expect(findMatchingShortcut(event, "global")).toBe("global.seekBackwardWhileTyping");
+      expect(bindingFromKeyboardEvent(event)).toMatchObject({ key: "<", shift: true, mod: true });
+    });
+
+    it("regression: still matches a Mod+Shift binding saved with the unshifted character", () => {
+      useShortcutBindingsStore.setState({ overrides: { "global.settings": { key: ".", shift: true, mod: true } } });
+      const press = keydown({ key: ".", code: "Period", shiftKey: true, ...MOD });
+      expect(matchesShortcutBinding(press, "global.settings")).toBe(true);
+    });
+
+    it("keeps named keys on any layout", () => {
+      expect(bindingFromKeyboardEvent(keydown({ key: "ArrowLeft", code: "ArrowLeft" }))).toEqual({ key: "ArrowLeft" });
     });
   });
 });

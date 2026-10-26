@@ -1,5 +1,7 @@
+import { SPECTRUM_CONTRAST } from "@/domain/spectrum/settings";
 import { useSettingsStore } from "@/stores/settings";
 import type { SettingId } from "@/stores/settings-catalog";
+import { BEAT_GRID_LINE_OPTIONS } from "@/ui/beat-grid-line-options";
 import { LAUNCH_SCREEN_OPTIONS, LIBRARY_SORT_OPTIONS } from "@/ui/projects/library-options";
 import { BridgeSection } from "@/ui/settings/bridge-section";
 import { CobaltInstancesSetting } from "@/ui/settings/cobalt-instances-setting";
@@ -14,6 +16,15 @@ import { KEEP_YOUTUBE_AUDIO_OPTIONS, STORAGE_LIMIT_OPTIONS } from "@/ui/settings
 import { StorageProtectionSetting } from "@/ui/settings/storage/storage-protection-setting";
 import { StorageUsageSetting } from "@/ui/settings/storage/storage-usage-setting";
 import { ThemeSettings } from "@/ui/settings/theme/theme-settings";
+import {
+  ANALYSIS_WINDOW_OPTIONS,
+  FREQUENCY_SCALE_OPTIONS,
+  PHASE_COLOUR_OPTIONS,
+  PITCH_LINE_OPTIONS,
+  SPECTRUM_PALETTE_OPTIONS,
+  SPECTRUM_SOURCE_OPTIONS,
+  SPECTRUM_TOP_OPTIONS,
+} from "@/ui/spectrum-options";
 import { useTimelineStore } from "@/views/timeline/timeline-store";
 
 // -- Types ---------------------------------------------------------------------
@@ -44,6 +55,14 @@ const SETTING_CONTROLS: Record<SettingId, SettingControl> = {
   autoExtractBackgroundVocals: TOGGLE,
   mergeStandaloneBackgroundLines: TOGGLE,
   preserveBracketsOnExtraction: TOGGLE,
+  musicBrainzLookup: {
+    kind: "select",
+    options: [
+      { value: "auto", label: "Automatic" },
+      { value: "manual", label: "On request" },
+      { value: "off", label: "Off" },
+    ],
+  },
   resetTour: { kind: "custom", Component: ResetTourSetting },
   resetAllSettings: { kind: "custom", Component: ResetAllSettingsSetting },
   libraryView: { kind: "custom", Component: LibraryViewSetting },
@@ -52,6 +71,7 @@ const SETTING_CONTROLS: Record<SettingId, SettingControl> = {
   theme: { kind: "custom", Component: ThemeSettings },
   defaultPlaybackRate: { kind: "custom", Component: DefaultPlaybackRateSetting },
   preservePitch: TOGGLE,
+  rememberPlaybackRate: TOGGLE,
   rememberVolume: TOGGLE,
   audioScrubPreview: TOGGLE,
   autoSeparateOnImport: TOGGLE,
@@ -86,8 +106,14 @@ const SETTING_CONTROLS: Record<SettingId, SettingControl> = {
   },
   timelineSnap: TOGGLE,
   vocalOnsetSnap: TOGGLE,
+  snapWordsAndLines: TOGGLE,
+  snapMarkers: TOGGLE,
+  beatSnap: TOGGLE,
+  beatGridVisible: TOGGLE,
+  beatGridLines: { kind: "select", options: [...BEAT_GRID_LINE_OPTIONS] },
   shareTimingInNewGroups: TOGGLE,
   loopOpenGroup: TOGGLE,
+  selectionLeadIn: { kind: "slider", min: 0, max: 1, step: 0.05, format: (v) => (v === 0 ? "Off" : asMilliseconds(v)) },
   timelineSnapThreshold: { kind: "slider", min: 4, max: 24, step: 1, format: (v) => `${v}px` },
   snapPlayheadToPoints: TOGGLE,
   followPlayhead: TOGGLE,
@@ -95,6 +121,21 @@ const SETTING_CONTROLS: Record<SettingId, SettingControl> = {
   syllablesFollowRolling: TOGGLE,
   defaultPreviewSidebar: TOGGLE,
   timelineHorizontalScroll: TOGGLE,
+  pitchLine: { kind: "select", options: [...PITCH_LINE_OPTIONS] },
+  showSpectrum: TOGGLE,
+  spectrumSource: { kind: "select", options: [...SPECTRUM_SOURCE_OPTIONS] },
+  spectrumPalette: { kind: "select", options: [...SPECTRUM_PALETTE_OPTIONS] },
+  spectrumContrast: {
+    kind: "slider",
+    min: SPECTRUM_CONTRAST.min,
+    max: SPECTRUM_CONTRAST.max,
+    step: 1,
+    format: (v) => `${v} dB`,
+  },
+  spectrumScale: { kind: "select", options: [...FREQUENCY_SCALE_OPTIONS] },
+  spectrumTop: { kind: "select", options: [...SPECTRUM_TOP_OPTIONS] },
+  spectrumWindow: { kind: "select", options: [...ANALYSIS_WINDOW_OPTIONS] },
+  spectrumPhase: { kind: "select", options: [...PHASE_COLOUR_OPTIONS] },
   splitCharacter: { kind: "custom", Component: SplitCharacterSetting },
   nudgeAmount: { kind: "slider", min: 0.01, max: 0.2, step: 0.01, format: asMilliseconds },
   defaultWordDuration: { kind: "slider", min: 0.1, max: 1, step: 0.05, format: asMilliseconds },
@@ -103,6 +144,8 @@ const SETTING_CONTROLS: Record<SettingId, SettingControl> = {
   undoRewindDuration: { kind: "slider", min: 0.5, max: 10, step: 0.5, format: (v) => `${v.toFixed(1)}s` },
   undoContinuePlayback: TOGGLE,
   autoRewindForBracketedLines: TOGGLE,
+  seekStep: { kind: "slider", min: 0.1, max: 5, step: 0.1, format: (v) => `${v.toFixed(1)}s` },
+  fineSeekStep: { kind: "slider", min: 0.01, max: 0.5, step: 0.01, format: asMilliseconds },
   syncCountIn: { kind: "slider", min: 0, max: 10, step: 1, format: (v) => (v === 0 ? "Off" : `${v}s`) },
   defaultGranularity: {
     kind: "select",

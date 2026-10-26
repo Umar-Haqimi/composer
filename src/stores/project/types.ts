@@ -5,10 +5,11 @@ import type { LineUpdate, LyricLine, RawLine } from "@/domain/line/model";
 import type { EditedLyrics } from "@/domain/project/edited-lyrics";
 import type { MetadataKey } from "@/domain/project/imported-metadata";
 import type { ProjectMetadata } from "@/domain/project/metadata";
-import type { TimingGranularity } from "@/domain/project/timing-granularity";
 import type { SyllableSplitDefaults } from "@/domain/project/syllable-split-defaults";
 import type { ProjectTab } from "@/domain/project/tab";
+import type { TimingGranularity } from "@/domain/project/timing-granularity";
 import type { SnapPoint } from "@/domain/snap-point/model";
+import type { BeatGrid } from "@/domain/tempo/beat-grid";
 import type { WordTiming } from "@/domain/word/timing";
 
 // -- Store-local Types --------------------------------------------------------
@@ -22,6 +23,7 @@ interface HistoryEntry {
   groups: LinkGroup[];
   agents: Agent[];
   customSnapPoints: SnapPoint[];
+  beatGrid: BeatGrid | null;
   timestamp: number;
 }
 
@@ -67,10 +69,15 @@ interface UiState {
 interface DismissalsState {
   dismissedSuggestions: string[];
   dismissedExplicitSuggestions: string[];
+  dismissedMetadataMatches: string[];
 }
 
 interface SnapPointsState {
   customSnapPoints: SnapPoint[];
+}
+
+interface BeatGridState {
+  beatGrid: BeatGrid | null;
 }
 
 interface HistoryState {
@@ -125,9 +132,13 @@ interface DismissalActions {
   dismissSuggestion: (fingerprint: string) => void;
   setDismissedSuggestions: (fingerprints: string[]) => void;
   clearDismissedSuggestions: () => void;
+  restoreSuggestions: (fingerprints: readonly string[]) => void;
   dismissExplicitSuggestion: (fingerprint: string) => void;
   setDismissedExplicitSuggestions: (fingerprints: string[]) => void;
   clearDismissedExplicitSuggestions: () => void;
+  restoreExplicitSuggestions: (fingerprints: readonly string[]) => void;
+  dismissMetadataMatch: (recordingId: string) => void;
+  setDismissedMetadataMatches: (recordingIds: string[]) => void;
 }
 
 interface SnapPointActions {
@@ -139,6 +150,13 @@ interface SnapPointActions {
   clearCustomSnapPoints: () => void;
 }
 
+interface BeatGridActions {
+  setBeatGrid: (grid: BeatGrid | null) => void;
+  applyBeatGridWithHistory: (grid: BeatGrid | null) => void;
+  nudgeBeatGridOffsetWithHistory: (grid: BeatGrid) => void;
+  clearBeatGrid: () => void;
+}
+
 interface HistoryActions {
   undo: () => void;
   redo: () => void;
@@ -148,12 +166,14 @@ interface HistoryActions {
   markDirty: () => void;
   markClean: () => void;
   commitPendingLineEdit: (baseline: LyricLine[], baselineWasDirty?: boolean) => void;
+  applyLineUpdatesToCurrentStep: (updates: LineUpdate[]) => void;
 }
 
 interface LineActions {
   setLines: (lines: RawLine[]) => void;
   // See the JSDoc on the implementation in lines-slice.ts before using this.
   setTransientLines: (lines: RawLine[]) => void;
+  restoreTransientLines: (lines: RawLine[]) => void;
   setLinesWithHistory: (lines: RawLine[], groups?: LinkGroup[]) => void;
   insertEmptyLineWithHistory: (anchorLineId: string, position: "above" | "below") => void;
   updateLine: (id: string, updates: Partial<LyricLine>, options?: { deriveText?: boolean }) => void;
@@ -224,6 +244,7 @@ type ProjectState = MetadataState &
   UiState &
   DismissalsState &
   SnapPointsState &
+  BeatGridState &
   HistoryState;
 
 type ProjectActions = MetadataActions &
@@ -231,6 +252,7 @@ type ProjectActions = MetadataActions &
   UiActions &
   DismissalActions &
   SnapPointActions &
+  BeatGridActions &
   HistoryActions &
   LineActions &
   GroupActions;
@@ -250,6 +272,7 @@ export type {
   UiState,
   DismissalsState,
   SnapPointsState,
+  BeatGridState,
   HistoryEntry,
   HistoryState,
   MetadataActions,
@@ -257,6 +280,7 @@ export type {
   UiActions,
   DismissalActions,
   SnapPointActions,
+  BeatGridActions,
   HistoryActions,
   LineActions,
   GroupActions,

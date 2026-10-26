@@ -148,3 +148,96 @@ describe("sync undo and bracket rewind settings", () => {
     expect(state.autoRewindForBracketedLines).toBe(false);
   });
 });
+
+describe("lastPlaybackRate", () => {
+  function v8Blob(defaultPlaybackRate: unknown): Record<string, unknown> {
+    const { lastPlaybackRate: _last, rememberPlaybackRate: _remember, ...blob } = legacyBlob({ defaultPlaybackRate });
+    return blob;
+  }
+
+  it("regression: an existing user keeps the speed they last used", async () => {
+    await rehydrateAt(8, v8Blob(1.1));
+    expect(useSettingsStore.getState().lastPlaybackRate).toBe(1.1);
+    expect(useSettingsStore.getState().defaultPlaybackRate).toBe(1.1);
+    expect(useSettingsStore.getState().rememberPlaybackRate).toBe(true);
+  });
+
+  it("falls back to the default when an old blob has no usable rate", async () => {
+    await rehydrateAt(8, v8Blob("fast"));
+    expect(useSettingsStore.getState().lastPlaybackRate).toBe(DEFAULTS.lastPlaybackRate);
+  });
+
+  it("copies nothing at the current version", async () => {
+    await rehydrateAt(9, v8Blob(1.1));
+    expect(useSettingsStore.getState().lastPlaybackRate).toBe(DEFAULTS.lastPlaybackRate);
+  });
+
+  it("leaves a saved last speed alone", async () => {
+    await rehydrateAt(8, { ...v8Blob(1.1), lastPlaybackRate: 0.8 });
+    expect(useSettingsStore.getState().lastPlaybackRate).toBe(0.8);
+  });
+});
+
+describe("seekStep", () => {
+  it("moves the first shipped default of 5 s to the finer default", async () => {
+    await rehydrateAt(9, legacyBlob({ seekStep: 5 }));
+    expect(useSettingsStore.getState().seekStep).toBe(0.5);
+  });
+
+  it("keeps a step the user chose", async () => {
+    await rehydrateAt(9, legacyBlob({ seekStep: 2 }));
+    expect(useSettingsStore.getState().seekStep).toBe(2);
+  });
+
+  it("brings a step past the new 5 s maximum back into range", async () => {
+    await rehydrateAt(9, legacyBlob({ seekStep: 8 }));
+    expect(useSettingsStore.getState().seekStep).toBe(5);
+  });
+
+  it("keeps 5 s chosen at the current version", async () => {
+    await rehydrateAt(10, legacyBlob({ seekStep: 5 }));
+    expect(useSettingsStore.getState().seekStep).toBe(5);
+  });
+});
+
+describe("selectionLeadIn migration", () => {
+  it("defaults selectionLeadIn to 0.3", () => {
+    const { selectionLeadIn: _drop, ...blob } = legacyBlob();
+    expect((migrateSettings(blob, 9) as Record<string, unknown>).selectionLeadIn).toBe(0.3);
+  });
+
+  it("keeps a chosen lead-in of 0", () => {
+    const migrated = migrateSettings(legacyBlob({ selectionLeadIn: 0 }), 9) as Record<string, unknown>;
+    expect(migrated.selectionLeadIn).toBe(0);
+  });
+});
+
+describe("spectrum and pitch settings", () => {
+  it("fills defaults for blobs written before they existed", async () => {
+    const blob = Object.fromEntries(
+      Object.entries(legacyBlob()).filter(
+        ([key]) => !key.startsWith("spectrum") && key !== "showSpectrum" && key !== "pitchLine",
+      ),
+    );
+    await rehydrateAt(10, blob);
+    const state = useSettingsStore.getState();
+    expect(state.showSpectrum).toBe(false);
+    expect(state.spectrumBandHeight).toBe(168);
+    expect(state.pitchLine).toBe("off");
+  });
+
+  it("drops spectrum values it does not recognise", async () => {
+    await rehydrateAt(10, legacyBlob({ spectrumPalette: "rainbow", pitchLine: "sometimes", spectrumBandHeight: 9000 }));
+    const state = useSettingsStore.getState();
+    expect(state.spectrumPalette).toBe("heat");
+    expect(state.pitchLine).toBe("off");
+    expect(state.spectrumBandHeight).toBe(320);
+  });
+
+  it("turns off the pitch line saved by the old default, but keeps a picked mode", async () => {
+    await rehydrateAt(11, legacyBlob({ pitchLine: "always" }));
+    expect(useSettingsStore.getState().pitchLine).toBe("off");
+    await rehydrateAt(11, legacyBlob({ pitchLine: "focus" }));
+    expect(useSettingsStore.getState().pitchLine).toBe("focus");
+  });
+});

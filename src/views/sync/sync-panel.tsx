@@ -1,7 +1,9 @@
 import { instancePositionsByLineId } from "@/domain/instance/enumerate";
 import { isLinked } from "@/domain/instance/predicates";
 import { getLanguageDisplayLine } from "@/domain/language/display";
+import { hasTransliteration } from "@/domain/language/has-transliteration";
 import { effectiveBounds } from "@/domain/line/bounds";
+import { isLineSynced } from "@/domain/line/predicates";
 import { isSyncComplete, syncProgress } from "@/domain/line/sync-progress";
 import { previousSlot, slotBounds } from "@/domain/sync/cursor";
 import { useFrameLoop } from "@/hooks/use-frame-loop";
@@ -14,14 +16,9 @@ import { useSettingsStore } from "@/stores/settings";
 import { setSyncEditMode, useSyncEditModeStore } from "@/stores/sync-edit-mode";
 import { EmptyState } from "@/ui/empty-state";
 import { shimmerTransition, shimmerVariants } from "@/utils/animationVariants";
+import { runHistoryShortcut } from "@/utils/history-shortcut";
 import { findMatchingShortcut } from "@/utils/shortcut-matcher";
-import {
-  type SyncState,
-  convertLineToWord,
-  getNudgeAmount,
-  hasLineTiming,
-  withSeededBackgroundWords,
-} from "@/utils/sync-helpers";
+import { type SyncState, getNudgeAmount, withSeededBackgroundWords } from "@/utils/sync-helpers";
 import { readToken } from "@/utils/theme/read-token";
 import { ScrollableLine, type ScrollableLineLinkInfo } from "@/views/sync/scrollable-line";
 import { SkippedInstanceBand } from "@/views/sync/skipped-instance-band";
@@ -41,7 +38,6 @@ const SyncPanel: React.FC = () => {
   const storeLines = useProjectStore((s) => s.lines);
   const lines = useMemo(() => storeLines.map(withSeededBackgroundWords), [storeLines]);
   const groups = useProjectStore((s) => s.groups);
-  const setLinesWithHistory = useProjectStore((s) => s.setLinesWithHistory);
   const undo = useProjectStore((s) => s.undo);
   const redo = useProjectStore((s) => s.redo);
   const activeTab = useProjectStore((s) => s.activeTab);
@@ -57,10 +53,7 @@ const SyncPanel: React.FC = () => {
   const seekTo = useAudioStore((s) => s.seekTo);
   const textVariant = useTimelineStore((s) => s.textVariant);
   const toggleTextVariant = useTimelineStore((s) => s.toggleTextVariant);
-  const hasTransliteration = useMemo(
-    () => lines.some((line) => !!(line.transliteration?.text || line.transliteration?.backgroundText)),
-    [lines],
-  );
+  const linesHaveTransliteration = useMemo(() => hasTransliteration(lines), [lines]);
   const displayLines = useMemo(
     () => lines.map((line) => ({ ...line, ...getLanguageDisplayLine(line, textVariant) })),
     [lines, textVariant],
@@ -218,21 +211,14 @@ const SyncPanel: React.FC = () => {
   );
 
   const progress = useMemo(() => syncProgress(lines, granularity), [lines, granularity]);
-  const progressText = `${progress.done}/${progress.total}`;
   const syncComplete = useMemo(() => isSyncComplete(lines), [lines]);
 
   const handleGranularityChange = useCallback(
     (newGranularity: "line" | "word") => {
       if (newGranularity === granularity) return;
-
-      if (newGranularity === "word" && hasLineTiming(lines)) {
-        const convertedLines = lines.map((line) => convertLineToWord(line));
-        setLinesWithHistory(convertedLines);
-      }
-
       setGranularity(newGranularity);
     },
-    [granularity, lines, setLinesWithHistory, setGranularity],
+    [granularity, setGranularity],
   );
 
   const handleToggleEdit = useCallback(() => {
@@ -373,15 +359,7 @@ const SyncPanel: React.FC = () => {
       if (activeTab !== "sync") return;
       if (isAnyModalOpen()) return;
 
-      if (e.code === "KeyZ" && (e.metaKey || e.ctrlKey) && !e.repeat) {
-        e.preventDefault();
-        if (e.shiftKey) {
-          redo();
-        } else {
-          undo();
-        }
-        return;
-      }
+      if (runHistoryShortcut(e, (action) => (action === "undo" ? undo() : redo()), { scope: "sync" })) return;
 
       const matched = findMatchingShortcut(e, "sync");
       if (!matched) return;
@@ -412,7 +390,7 @@ const SyncPanel: React.FC = () => {
           break;
         case "sync.toggleTextVariant":
           e.preventDefault();
-          if (hasTransliteration) toggleTextVariant();
+          if (linesHaveTransliteration) toggleTextVariant();
           break;
       }
     };
@@ -451,7 +429,7 @@ const SyncPanel: React.FC = () => {
     handleUndoAndRewindLine,
     editMode,
     isHolding,
-    hasTransliteration,
+    linesHaveTransliteration,
     toggleTextVariant,
   ]);
 
@@ -480,9 +458,9 @@ const SyncPanel: React.FC = () => {
   return (
     <div data-tour="sync-panel" className="flex flex-col flex-1 overflow-hidden select-none">
       <SyncHeader
-        progressText={progressText}
+        progress={progress}
         textVariant={textVariant}
-        hasTransliteration={hasTransliteration}
+        hasTransliteration={linesHaveTransliteration}
         toggleTextVariant={toggleTextVariant}
         granularity={granularity}
         handleGranularityChange={handleGranularityChange}
@@ -495,8 +473,8 @@ const SyncPanel: React.FC = () => {
 
       {/* Main sync area */}
       {showScrollableView ? (
-        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto overscroll-contain">
-          <div className="py-2">
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto overscroll-none">
+          <div>
             {lines.map((line, index) => {
               const displayLine = displayLines[index];
               const timing = effectiveBounds(line);
@@ -519,6 +497,7 @@ const SyncPanel: React.FC = () => {
                     words={displayLine.words ?? line.words}
                     lineBegin={timing?.begin}
                     lineEnd={timing?.end}
+                    lineSynced={isLineSynced(line)}
                     granularity={granularity}
                     currentTime={currentTime}
                     editMode={editMode}
@@ -554,7 +533,7 @@ const SyncPanel: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center flex-1 px-8 py-12">
+        <div className="flex flex-col items-center justify-center flex-1 px-12 py-12">
           {isComplete ? (
             syncComplete ? (
               <div className="text-center">
