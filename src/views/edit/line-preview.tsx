@@ -12,6 +12,7 @@ interface LinePreviewProps {
   line: ParsedLine;
   agents: { id: string; name?: string }[];
   isSelected: boolean;
+  isPlaying: boolean;
   hasMultipleSelected: boolean;
   groupColor?: string;
   groupTooltip?: string;
@@ -32,8 +33,9 @@ const ROW_BODY = "flex flex-1 min-w-0 items-center gap-2 pl-3 pr-2 border-b bord
 
 // -- Helpers ------------------------------------------------------------------
 
-function rowBodyTone(isSelected: boolean, hasBrackets: boolean, inGroup: boolean): string {
+function rowBodyTone(isSelected: boolean, isPlaying: boolean, hasBrackets: boolean, inGroup: boolean): string {
   if (isSelected) return "bg-composer-accent/15";
+  if (isPlaying) return "bg-composer-accent/8";
   if (hasBrackets) return "bg-composer-warning/8";
   return inGroup ? "bg-[color-mix(in_oklab,var(--group)_4%,transparent)]" : "group-hover:bg-(--layer-1)";
 }
@@ -69,7 +71,7 @@ const EmptyLinePreview: React.FC<{
   columnStyle: React.CSSProperties;
   onGutterMouseEnter: LinePreviewProps["onGutterMouseEnter"];
 }> = ({ lineNumber, columnStyle, onGutterMouseEnter }) => (
-  <div className="flex items-stretch min-h-7 opacity-60">
+  <div className="flex items-stretch min-h-7 opacity-60" data-line-row={lineNumber} data-line-empty="">
     <span
       className={cn(LINE_COLUMN, "items-center text-[11px] tabular-nums text-(--muted) select-none")}
       style={columnStyle}
@@ -85,6 +87,7 @@ const LinePreview: React.FC<LinePreviewProps> = ({
   line,
   agents,
   isSelected,
+  isPlaying,
   hasMultipleSelected,
   groupColor,
   groupTooltip,
@@ -140,6 +143,8 @@ const LinePreview: React.FC<LinePreviewProps> = ({
       role="button"
       tabIndex={-1}
       className="group flex items-stretch min-h-7 cursor-pointer"
+      data-line-row={line.lineNumber}
+      data-speaking={isPlaying || undefined}
       style={groupColor ? { "--group": groupColor } : undefined}
       onMouseDown={handleMouseDown}
       onClick={selectLineForBulkEdit}
@@ -156,7 +161,7 @@ const LinePreview: React.FC<LinePreviewProps> = ({
         className={cn(
           LINE_COLUMN,
           "items-center text-[11px] tabular-nums select-none cursor-pointer",
-          isSelected ? "font-semibold text-composer-text" : "text-(--muted)",
+          isSelected || isPlaying ? "font-semibold text-composer-text" : "text-(--muted)",
         )}
         style={columnStyle}
         onMouseDown={(e) => onGutterMouseDown(line.lineNumber, e)}
@@ -169,7 +174,7 @@ const LinePreview: React.FC<LinePreviewProps> = ({
         {line.lineNumber}
       </span>
 
-      <div className={cn(ROW_BODY, rowBodyTone(isSelected, line.hasBrackets, groupColor !== undefined))}>
+      <div className={cn(ROW_BODY, rowBodyTone(isSelected, isPlaying, line.hasBrackets, groupColor !== undefined))}>
         <span
           data-testid="line-preview-text"
           className={cn(
