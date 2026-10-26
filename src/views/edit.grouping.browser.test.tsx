@@ -60,6 +60,37 @@ describe("EditPanel · grouping suggestions", () => {
     expect(store().lines.every((candidate) => candidate.groupId === undefined)).toBe(true);
   });
 
+  describe("ghost groups in the preview", () => {
+    it("shows each run as a ghost group and groups them from its header", async () => {
+      useProjectStore.setState({ activeTab: "edit", lines: songWithTwoChoruses(), groups: [] });
+      const screen = await render(<EditPanel />);
+      const ghostGroup = screen.getByRole("button", { name: "Group suggested lines" });
+      await expect.element(ghostGroup.first()).toBeVisible();
+      expect(ghostGroup.elements()).toHaveLength(2);
+
+      await ghostGroup.first().click();
+
+      await expect.poll(() => store().groups).toHaveLength(1);
+      const grouped = store().lines.filter((candidate) => candidate.groupId !== undefined);
+      expect(grouped.map((candidate) => candidate.id)).toEqual(["c1a", "c1b", "c2a", "c2b"]);
+      await expect.element(ghostGroup.first()).not.toBeInTheDocument();
+    });
+
+    it("dismisses a ghost group from its header", async () => {
+      useProjectStore.setState({ activeTab: "edit", lines: songWithTwoChoruses(), groups: [] });
+      const [suggestion] = findRepeatingStandaloneSections(store().lines);
+      const screen = await render(<EditPanel />);
+
+      await screen.getByRole("button", { name: "Dismiss suggested group" }).first().click();
+
+      await expect.poll(() => store().dismissedSuggestions).toContain(suggestion.fingerprint);
+      await expect
+        .element(screen.getByRole("button", { name: "Group suggested lines" }).first())
+        .not.toBeInTheDocument();
+      expect(store().groups).toEqual([]);
+    });
+  });
+
   describe("regressions", () => {
     it("regression: hides the suggestion while the lyrics are being typed", async () => {
       useProjectStore.setState({ activeTab: "edit", lines: songWithTwoChoruses(), groups: [] });

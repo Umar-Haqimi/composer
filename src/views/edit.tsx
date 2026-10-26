@@ -495,6 +495,7 @@ const EditPanel: React.FC = () => {
               >
                 <PreviewRows
                   parsed={parsed}
+                  showSuggestions={!isTypingLyrics}
                   selectedLines={selectedLines}
                   playingLineIds={playingLineIds}
                   onSelect={handleLineSelect}

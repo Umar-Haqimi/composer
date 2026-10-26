@@ -3,7 +3,6 @@ import { cn } from "@/utils/cn";
 import { stripSplitCharacter } from "@/utils/split-character";
 import { LinePreviewActions } from "@/views/edit/line-preview-actions";
 import type { ParsedLine } from "@/views/edit/parse-lyrics";
-import { IconLink } from "@tabler/icons-react";
 import { useCallback } from "react";
 
 // -- Interfaces ---------------------------------------------------------------
@@ -15,6 +14,7 @@ interface LinePreviewProps {
   isPlaying: boolean;
   hasMultipleSelected: boolean;
   groupColor?: string;
+  isGhostGroup?: boolean;
   groupTooltip?: string;
   onSelect: (lineNumber: number, shiftKey: boolean) => void;
   onAgentChange: (lineId: string, agentId: string) => void;
@@ -33,38 +33,23 @@ const ROW_BODY = "flex flex-1 min-w-0 items-center gap-2 pl-3 pr-2 border-b bord
 
 // -- Helpers ------------------------------------------------------------------
 
-function rowBodyTone(isSelected: boolean, isPlaying: boolean, hasBrackets: boolean, inGroup: boolean): string {
+function rowBodyTone(
+  isSelected: boolean,
+  isPlaying: boolean,
+  hasBrackets: boolean,
+  inGroup: boolean,
+  isGhost: boolean,
+) {
   if (isSelected) return "bg-composer-accent/15";
   if (isPlaying) return "bg-composer-accent/8";
   if (hasBrackets) return "bg-composer-warning/8";
-  return inGroup ? "bg-[color-mix(in_oklab,var(--group)_4%,transparent)]" : "group-hover:bg-(--layer-1)";
+  if (!inGroup) return "group-hover:bg-(--layer-1)";
+  return isGhost
+    ? "bg-[color-mix(in_oklab,var(--group)_2%,transparent)] group-hover:bg-(--layer-1)"
+    : "bg-[color-mix(in_oklab,var(--group)_4%,transparent)]";
 }
 
 // -- Components ---------------------------------------------------------------
-
-const PreviewGroupHeader: React.FC<{ label: string; ordinal: number; total: number; color: string }> = ({
-  label,
-  ordinal,
-  total,
-  color,
-}) => (
-  <div className="flex h-[26px] select-none" style={{ "--group": color }} aria-hidden>
-    <span className="grid place-items-center w-11 shrink-0 bg-[color-mix(in_oklab,var(--group)_10%,var(--gutter-bg))] shadow-[inset_-2px_0_0_color-mix(in_oklab,var(--group)_45%,var(--gutter-bg)),inset_0_-1px_0_var(--divider)]">
-      <IconLink className="size-[13px] text-(--group)" />
-    </span>
-    <span
-      className={cn(
-        ROW_BODY,
-        "gap-1.5 text-[11.5px] text-(--muted) bg-[color-mix(in_oklab,var(--group)_9%,transparent)]",
-      )}
-    >
-      <b className="min-w-0 truncate font-semibold text-(--group)">{label}</b>
-      <span className="shrink-0 tabular-nums">
-        ・ {ordinal} of {total}
-      </span>
-    </span>
-  </div>
-);
 
 const EmptyLinePreview: React.FC<{
   lineNumber: number;
@@ -90,6 +75,7 @@ const LinePreview: React.FC<LinePreviewProps> = ({
   isPlaying,
   hasMultipleSelected,
   groupColor,
+  isGhostGroup = false,
   groupTooltip,
   onSelect,
   onAgentChange,
@@ -174,7 +160,12 @@ const LinePreview: React.FC<LinePreviewProps> = ({
         {line.lineNumber}
       </span>
 
-      <div className={cn(ROW_BODY, rowBodyTone(isSelected, isPlaying, line.hasBrackets, groupColor !== undefined))}>
+      <div
+        className={cn(
+          ROW_BODY,
+          rowBodyTone(isSelected, isPlaying, line.hasBrackets, groupColor !== undefined, isGhostGroup),
+        )}
+      >
         <span
           data-testid="line-preview-text"
           className={cn(
@@ -213,4 +204,4 @@ const LinePreview: React.FC<LinePreviewProps> = ({
 
 // -- Exports ------------------------------------------------------------------
 
-export { LinePreview, PreviewGroupHeader };
+export { LinePreview, ROW_BODY };

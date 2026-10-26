@@ -14,7 +14,7 @@ See `tasks/plan.md` and `SPEC.md`.
   - Verify: `pnpm typecheck`; `pnpm test:component` (all `edit.*.browser.test.tsx` green).
   - Files: `src/views/edit.tsx`, `src/views/edit/preview-rows.tsx` (new)
 
-- [ ] T3: Ghost groups in the preview (test-first)
+- [x] T3: Ghost groups in the preview (test-first)
   - Acceptance: test 1 from SPEC passes; each run of a visible suggestion shows a faded header (Suggested,
     `n of m`, Group, Dismiss) and faded row tint; Group and Dismiss match the notice; ghost buttons don't
     affect selection.

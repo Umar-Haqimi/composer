@@ -6,14 +6,23 @@ import { useProjectStore } from "@/stores/project";
 import { useSettingsStore } from "@/stores/settings";
 import { extractInlineFromLine } from "@/utils/background-vocal-extraction";
 import { pluralize } from "@/utils/pluralize";
-import { LinePreview, PreviewGroupHeader } from "@/views/edit/line-preview";
+import { LinePreview } from "@/views/edit/line-preview";
 import type { ParsedLine } from "@/views/edit/parse-lyrics";
+import { GHOST_COLOR, GhostGroupHeader, PreviewGroupHeader } from "@/views/edit/preview-group-header";
+import { ghostRunsByLineId } from "@/views/grouping/ghost-runs";
+import {
+  acceptSuggestion,
+  dismissSuggestions,
+  useVisibleGroupingSuggestions,
+} from "@/views/grouping/use-grouping-suggestions";
 import { useMemo } from "react";
 
 // -- Interfaces ---------------------------------------------------------------
 
 interface PreviewRowsProps {
   parsed: ParsedLine[];
+  // Matches the header notice, which hides suggestions while the lyrics are being typed.
+  showSuggestions: boolean;
   selectedLines: ReadonlySet<number>;
   playingLineIds: ReadonlySet<string>;
   onSelect: (lineNumber: number, shiftKey: boolean) => void;
@@ -66,6 +75,7 @@ function handleExtractLine(lineId: string): void {
 
 const PreviewRows: React.FC<PreviewRowsProps> = ({
   parsed,
+  showSuggestions,
   selectedLines,
   playingLineIds,
   onSelect,
@@ -81,6 +91,8 @@ const PreviewRows: React.FC<PreviewRowsProps> = ({
     () => new Map(groups.map((g) => [g.id, instanceCount(lines, g.id)])),
     [groups, lines],
   );
+  const { visible: suggestions } = useVisibleGroupingSuggestions(showSuggestions);
+  const ghostRuns = useMemo(() => ghostRunsByLineId(suggestions, lines), [suggestions, lines]);
 
   if (parsed.length === 0 || (parsed.length === 1 && parsed[0].isEmpty)) {
     return (
@@ -97,6 +109,7 @@ const PreviewRows: React.FC<PreviewRowsProps> = ({
           line.instanceIdx !== undefined &&
           (prev?.groupId !== line.groupId || prev?.instanceIdx !== line.instanceIdx);
         const group = line.groupId ? groups.find((g) => g.id === line.groupId) : undefined;
+        const ghost = group ? undefined : ghostRuns.get(line.lineId);
         const totalInstances = group ? (instanceCountByGroup.get(group.id) ?? 0) : 0;
         const groupTooltip =
           group && totalInstances > 1
@@ -112,13 +125,22 @@ const PreviewRows: React.FC<PreviewRowsProps> = ({
                 color={group.color}
               />
             )}
+            {ghost?.isFirstLine && (
+              <GhostGroupHeader
+                ordinal={ghost.ordinal}
+                total={ghost.section.starts.length}
+                onGroup={() => acceptSuggestion(ghost.section)}
+                onDismiss={() => dismissSuggestions([ghost.section.fingerprint])}
+              />
+            )}
             <LinePreview
               line={line}
               agents={agents}
               isSelected={selectedLines.has(line.lineNumber)}
               isPlaying={playingLineIds.has(line.lineId)}
               hasMultipleSelected={selectedLines.size > 1}
-              groupColor={group?.color}
+              groupColor={group?.color ?? (ghost ? GHOST_COLOR : undefined)}
+              isGhostGroup={ghost !== undefined}
               groupTooltip={groupTooltip}
               onSelect={onSelect}
               onAgentChange={handleAgentChange}
