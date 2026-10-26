@@ -8,7 +8,7 @@ See `tasks/plan.md` and `SPEC.md`.
   - Verify: `pnpm typecheck`; `pnpm test:component` (existing `edit.grouping` and `use-grouping-notice` tests green).
   - Files: `src/views/grouping/use-grouping-suggestions.ts` (new), `src/views/grouping/use-grouping-notice.tsx`
 
-- [ ] T2: Extract preview row rendering out of `edit.tsx` (refactor)
+- [x] T2: Extract preview row rendering out of `edit.tsx` (refactor)
   - Acceptance: `<PreviewRows>` renders parsed rows and real group headers; `edit.tsx` only passes props/handlers;
     `edit.tsx` line count goes down; no visible change.
   - Verify: `pnpm typecheck`; `pnpm test:component` (all `edit.*.browser.test.tsx` green).

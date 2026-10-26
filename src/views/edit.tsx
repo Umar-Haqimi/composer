@@ -1,11 +1,7 @@
 import type { LinkGroup } from "@/domain/group/template";
-import { instanceCount, instanceOrdinal } from "@/domain/instance/enumerate";
 import { lineIdsActiveAt } from "@/domain/line/active-at-time";
-import { backgroundFields } from "@/domain/line/background";
 import type { LyricLine } from "@/domain/line/model";
 import { LYRICS_FORMATS_PROSE } from "@/domain/lyrics-file/supported-formats";
-import { remapWordTextsPreservingTiming } from "@/domain/word/remap-text";
-import type { WordTiming } from "@/domain/word/timing";
 import { useDualClickImport } from "@/hooks/useDualClickImport";
 import { useAudioStore } from "@/stores/audio";
 import { useConfirm } from "@/stores/confirm-store";
@@ -13,26 +9,26 @@ import { isAnyModalOpen } from "@/stores/escape-layer-stack";
 import { useImportModal, useImportModalStore, useLastImportResult } from "@/stores/import-modal-store";
 import { useProjectStore } from "@/stores/project";
 import { useSettingsStore } from "@/stores/settings";
-import { historyShortcutAction } from "@/utils/history-shortcut";
 import { Button } from "@/ui/button";
 import { Scroll } from "@/ui/scroll";
+import { extractBackgroundVocals } from "@/utils/background-vocal-extraction";
 import { cn } from "@/utils/cn";
-import { extractBackgroundVocals, extractInlineFromLine } from "@/utils/background-vocal-extraction";
+import { historyShortcutAction } from "@/utils/history-shortcut";
 import { pluralWord, pluralize } from "@/utils/pluralize";
 import { AgentManager } from "@/views/edit/agent-manager";
 import { decideEditTextAction } from "@/views/edit/decide-edit-text-action";
 import { detachInstancesFromLines } from "@/views/edit/diff-edit-text";
-import { linesToEditText } from "@/views/edit/edit-text";
 import { EditNotices } from "@/views/edit/edit-notices";
+import { linesToEditText } from "@/views/edit/edit-text";
 import { ImportSuccessBanner } from "@/views/edit/import-success-banner";
-import { LinePreview, PreviewGroupHeader } from "@/views/edit/line-preview";
 import { parseLyrics } from "@/views/edit/parse-lyrics";
+import { PreviewRows } from "@/views/edit/preview-rows";
+import { PreviewSelectionBar } from "@/views/edit/preview-selection-bar";
 import { useComposedTextareaChange, useEditTextCaret } from "@/views/edit/use-edit-text-caret";
 import { useFocusLyricsShortcut } from "@/views/edit/use-focus-lyrics-shortcut";
 import { useRubberBandSelect } from "@/views/edit/use-rubber-band-select";
 import { useScrollSync } from "@/views/edit/use-scroll-sync";
 import { useSmartPaste } from "@/views/edit/use-smart-paste";
-import { PreviewSelectionBar } from "@/views/edit/preview-selection-bar";
 import { PROJECT_FILE_PROSE } from "@/views/lyrics-import-modal/accepted-files";
 import { useImportContext } from "@/views/lyrics-import-modal/import-lyrics";
 import { importLyricsFile } from "@/views/lyrics-import-modal/import-lyrics-source";
@@ -104,11 +100,6 @@ const EditPanel: React.FC = () => {
     () => parsed.flatMap((p) => (p.lineId && playingLineIds.has(p.lineId) ? [p.lineNumber] : [])),
     [parsed, playingLineIds],
   );
-  const instanceCountByGroup = useMemo(
-    () => new Map(groups.map((g) => [g.id, instanceCount(lines, g.id)])),
-    [groups, lines],
-  );
-
   const extractOptions = useMemo(
     () => ({
       mergeStandaloneLines: mergeStandaloneBackgroundLines,
@@ -134,43 +125,6 @@ const EditPanel: React.FC = () => {
     if (next.length === current.length && next.every((line, i) => line === current[i])) return;
     commitLinesWithHistory(next);
   }, [extractOptions, commitLinesWithHistory]);
-
-  const handleAgentChange = useCallback((lineId: string, agentId: string) => {
-    useProjectStore.getState().updateLineWithHistory(lineId, { agentId });
-  }, []);
-
-  const handleBackgroundChange = useCallback((lineId: string, text: string) => {
-    const newBgText = text || undefined;
-    const target = useProjectStore.getState().lines.find((l) => l.id === lineId);
-
-    let words: WordTiming[] | undefined;
-    if (newBgText && target?.backgroundWords?.length) {
-      words = remapWordTextsPreservingTiming(target.backgroundWords, newBgText);
-    }
-
-    useProjectStore
-      .getState()
-      .updateLineWithHistory(lineId, backgroundFields({ text: newBgText, words, source: "manual" }));
-  }, []);
-
-  const handleExtractLine = useCallback((lineId: string) => {
-    const target = useProjectStore.getState().lines.find((line) => line.id === lineId);
-    if (!target) return;
-    const extracted = extractInlineFromLine(target, {
-      mergeStandaloneLines: false,
-      preserveBrackets: useSettingsStore.getState().preserveBracketsOnExtraction,
-    });
-    if (extracted === target) return;
-    useProjectStore.getState().updateLineWithHistory(lineId, {
-      text: extracted.text,
-      words: extracted.words,
-      ...backgroundFields({
-        text: extracted.backgroundText,
-        words: extracted.backgroundWords,
-        source: extracted.backgroundTextSource ?? "manual",
-      }),
-    });
-  }, []);
 
   const handleLineSelect = useCallback((lineNumber: number, shiftKey: boolean) => {
     const anchor = lastSelectedLineRef.current;
@@ -539,56 +493,16 @@ const EditPanel: React.FC = () => {
                 viewportRef={rubberBand.viewportRef}
                 onScrollTopChange={handlePreviewScroll}
               >
-                {parsed.length === 0 || (parsed.length === 1 && parsed[0].isEmpty) ? (
-                  <div className="flex items-center justify-center h-full text-sm text-(--muted)">
-                    Lyrics will appear here
-                  </div>
-                ) : (
-                  <div>
-                    {parsed.map((line, index) => {
-                      const prev = index > 0 ? parsed[index - 1] : null;
-                      const isFirstOfInstance =
-                        line.groupId !== undefined &&
-                        line.instanceIdx !== undefined &&
-                        (prev?.groupId !== line.groupId || prev?.instanceIdx !== line.instanceIdx);
-                      const group = line.groupId ? groups.find((g) => g.id === line.groupId) : undefined;
-                      const totalInstances = group ? (instanceCountByGroup.get(group.id) ?? 0) : 0;
-                      const groupTooltip =
-                        group && totalInstances > 1
-                          ? `Part of ${group.label} · linked to ${pluralize(totalInstances - 1, "other instance")}. Edits propagate.`
-                          : undefined;
-                      return (
-                        <div key={line.lineNumber}>
-                          {isFirstOfInstance && group && line.instanceIdx !== undefined && (
-                            <PreviewGroupHeader
-                              label={group.label}
-                              ordinal={instanceOrdinal(lines, group.id, line.instanceIdx)}
-                              total={totalInstances}
-                              color={group.color}
-                            />
-                          )}
-                          <LinePreview
-                            line={line}
-                            agents={agents}
-                            isSelected={selectedLines.has(line.lineNumber)}
-                            isPlaying={playingLineIds.has(line.lineId)}
-                            hasMultipleSelected={selectedLines.size > 1}
-                            groupColor={group?.color}
-                            groupTooltip={groupTooltip}
-                            onSelect={handleLineSelect}
-                            onAgentChange={handleAgentChange}
-                            onBulkAgentChange={handleBulkAgentChange}
-                            onBackgroundChange={handleBackgroundChange}
-                            onExtractLine={handleExtractLine}
-                            onGutterMouseDown={handleGutterMouseDown}
-                            onGutterMouseEnter={handleGutterMouseEnter}
-                            didDragRef={didDragRef}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                <PreviewRows
+                  parsed={parsed}
+                  selectedLines={selectedLines}
+                  playingLineIds={playingLineIds}
+                  onSelect={handleLineSelect}
+                  onBulkAgentChange={handleBulkAgentChange}
+                  onGutterMouseDown={handleGutterMouseDown}
+                  onGutterMouseEnter={handleGutterMouseEnter}
+                  didDragRef={didDragRef}
+                />
               </Scroll>
               {rubberBand.band && (
                 <div
