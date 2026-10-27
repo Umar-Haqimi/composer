@@ -1,3 +1,4 @@
+import { cancelNextFrame, nextFrame } from "@/lib/frame-loop";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 // -- Types --------------------------------------------------------------------
@@ -122,7 +123,7 @@ function useRubberBandSelect({ getSelection, onSelect }: RubberBandOptions) {
         const before = viewport.scrollTop;
         viewport.scrollTop += Math.round(delta * AUTOSCROLL_MAX_SPEED_PX);
         if (viewport.scrollTop !== before) update();
-        frame = requestAnimationFrame(autoscroll);
+        frame = nextFrame(autoscroll);
       };
 
       const handleMove = (ev: MouseEvent) => {
@@ -133,13 +134,13 @@ function useRubberBandSelect({ getSelection, onSelect }: RubberBandOptions) {
         }
         window.getSelection()?.removeAllRanges();
         update();
-        if (!frame) frame = requestAnimationFrame(autoscroll);
+        if (!frame) frame = nextFrame(autoscroll);
       };
 
       const cleanup = () => {
         window.removeEventListener("mousemove", handleMove);
         window.removeEventListener("mouseup", handleUp);
-        if (frame) cancelAnimationFrame(frame);
+        if (frame) cancelNextFrame(frame);
         cleanupRef.current = null;
       };
 

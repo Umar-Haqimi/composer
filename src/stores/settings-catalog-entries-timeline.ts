@@ -104,11 +104,11 @@ const TIMELINE_CATALOG_ENTRIES = {
     keywords: ["auto scroll"],
     settingKey: "followPlayhead",
   },
-  defaultRollingEdit: {
+  rollingEdit: {
     section: "timeline",
-    label: "Default rolling edit mode",
-    description: "Start in rolling edit mode when opening a project.",
-    settingKey: "defaultRollingEdit",
+    label: "Rolling edit",
+    description: "Dragging a shared word boundary moves both words together.",
+    settingKey: "rollingEdit",
   },
   syllablesFollowRolling: {
     section: "timeline",
@@ -117,11 +117,11 @@ const TIMELINE_CATALOG_ENTRIES = {
       "Syllables of one word move together only in rolling edit mode, like separate words. When off, they always move together.",
     settingKey: "syllablesFollowRolling",
   },
-  defaultPreviewSidebar: {
+  previewSidebar: {
     section: "timeline",
-    label: "Default preview sidebar",
-    description: "Open the preview sidebar by default.",
-    settingKey: "defaultPreviewSidebar",
+    label: "Preview sidebar",
+    description: "Show the lyrics preview beside the timeline.",
+    settingKey: "previewSidebar",
   },
   timelineHorizontalScroll: {
     section: "timeline",

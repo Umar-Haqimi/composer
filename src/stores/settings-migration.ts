@@ -1,3 +1,4 @@
+import { BUILTIN_ALIGNMENT_MODEL, RECOMMENDED_ALIGNMENT_MODEL } from "@/audio/alignment/hubertfa/model-manifest";
 import { isPitchLineMode } from "@/domain/pitch/pitch-line-mode";
 import { isLibrarySort } from "@/domain/project/library-order";
 import { isLaunchScreen, isLibraryView } from "@/domain/project/library-preferences";
@@ -11,24 +12,32 @@ import { migrateLlmProfiles } from "@/stores/settings-llm-profiles";
 
 interface RetiredSettings {
   confirmReplaceProjectFromHash?: boolean;
+  defaultRollingEdit?: unknown;
+  defaultPreviewSidebar?: unknown;
 }
 
 // -- Constants ----------------------------------------------------------------
 
-const SETTINGS_PERSIST_VERSION = 12;
+const SETTINGS_PERSIST_VERSION = 14;
 
 // -- Migration ----------------------------------------------------------------
 
 function migrateSettings(persistedState: unknown, version: number): unknown {
   if (!persistedState || typeof persistedState !== "object") return persistedState;
-  const { confirmReplaceProjectFromHash: _retired, ...state } = persistedState as Partial<SettingsState> &
-    RetiredSettings;
+  const {
+    confirmReplaceProjectFromHash: _retired,
+    defaultRollingEdit,
+    defaultPreviewSidebar,
+    ...state
+  } = persistedState as Partial<SettingsState> & RetiredSettings;
   const next: Partial<SettingsState> = { ...state };
+  if (typeof defaultRollingEdit === "boolean") next.rollingEdit = defaultRollingEdit;
+  if (typeof defaultPreviewSidebar === "boolean") next.previewSidebar = defaultPreviewSidebar;
+  if (next.rollingEdit === undefined) next.rollingEdit = false;
+  if (next.previewSidebar === undefined) next.previewSidebar = false;
   if (version < 2 || next.vocalModelVariant === "fp16") {
     next.vocalModelVariant = "fp32";
   }
-  if (next.defaultRollingEdit === undefined) next.defaultRollingEdit = false;
-  if (next.defaultPreviewSidebar === undefined) next.defaultPreviewSidebar = false;
   if (next.vocalOnsetSnap === undefined) next.vocalOnsetSnap = true;
   if (next.snapPlayheadToPoints === undefined) next.snapPlayheadToPoints = true;
   if (next.redoPreroll === undefined) next.redoPreroll = 1.5;
@@ -46,6 +55,10 @@ function migrateSettings(persistedState: unknown, version: number): unknown {
   // "always" was the default before 12, so a saved "always" is the old default, not a choice.
   if (version < 12 && next.pitchLine === "always") next.pitchLine = "off";
   migrateLlmProfiles(next);
+  // The built-in model was the default before 13, so a saved one is the old default, not a choice.
+  if (version < 13 && next.alignmentModelId === BUILTIN_ALIGNMENT_MODEL.id) {
+    next.alignmentModelId = RECOMMENDED_ALIGNMENT_MODEL;
+  }
   const {
     librarySort,
     libraryView,

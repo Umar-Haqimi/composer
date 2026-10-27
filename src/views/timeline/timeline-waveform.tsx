@@ -1,6 +1,6 @@
 import { useAudioStore } from "@/stores/audio";
+import { useSettingsStore } from "@/stores/settings";
 import { useThemeStore } from "@/stores/theme";
-import { isAbortError } from "@/utils/abort-error";
 import { cn } from "@/utils/cn";
 import { readToken } from "@/utils/theme/read-token";
 import { BeatGridCanvas } from "@/views/timeline/beat-grid/beat-grid-canvas";
@@ -14,7 +14,7 @@ import { clearLoopRegion } from "@/views/timeline/selection-playback";
 import { WAVEFORM_HEIGHT, useTimelineStore } from "@/views/timeline/timeline-store";
 import { WaveformFocusShade } from "@/views/timeline/waveform-focus-shade";
 import WavesurferPlayer from "@wavesurfer/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import type WaveSurfer from "wavesurfer.js";
 
 // -- Interfaces ----------------------------------------------------------------
@@ -34,7 +34,6 @@ interface WaveformBarsProps {
 const FADE_SETTLE_MS = 260;
 // The bars sit in a 13px margin inside the 80px band.
 const WAVEFORM_BARS_HEIGHT = 54;
-const LOG_PREFIX = "[TimelineWaveform]";
 
 // -- Component -----------------------------------------------------------------
 
@@ -83,7 +82,7 @@ const TimelineWaveform: React.FC = () => {
   const zoom = useTimelineStore((s) => s.zoom);
   const activeThemeId = useThemeStore((s) => s.activeThemeId);
   const markerMode = useTimelineStore((s) => s.markerMode);
-  const spectrumVisible = useTimelineStore((s) => s.spectrumVisible);
+  const showSpectrum = useSettingsStore((s) => s.showSpectrum);
 
   const [ws, setWs] = useState<WaveSurfer | null>(null);
   const [settledFor, setSettledFor] = useState<WaveSurfer | null>(null);
@@ -93,7 +92,16 @@ const TimelineWaveform: React.FC = () => {
   const sweeping = ws === null || settledFor !== ws;
 
   const totalWidth = duration > 0 ? duration * zoom : 0;
-  const waveformKey = audioElement?.src ?? "no-audio";
+  // Rebuild on loadstart, keyed on currentSrc: wavesurfer loads currentSrc, which lags src until then.
+  const subscribeToMediaSource = useCallback(
+    (onSourceChange: () => void) => {
+      audioElement?.addEventListener("loadstart", onSourceChange);
+      return () => audioElement?.removeEventListener("loadstart", onSourceChange);
+    },
+    [audioElement],
+  );
+  const readMediaSource = () => audioElement?.currentSrc || audioElement?.src || "no-audio";
+  const waveformKey = useSyncExternalStore(subscribeToMediaSource, readMediaSource, readMediaSource);
 
   const [initialColors] = useState(() => ({
     wave: readToken("wave"),
@@ -108,23 +116,11 @@ const TimelineWaveform: React.FC = () => {
     ws.setOptions({ waveColor: readToken("wave"), progressColor: readToken("wave-progress") });
   }, [ws, activeThemeId]);
 
-  useEffect(() => {
-    if (!ws || !audioElement) return;
-    const onLoadStart = () => {
-      if (!audioElement.src) return;
-      ws.load(audioElement.src).catch((error: unknown) => {
-        if (!isAbortError(error)) console.error(LOG_PREFIX, "waveform reload failed", error);
-      });
-    };
-    audioElement.addEventListener("loadstart", onLoadStart);
-    return () => audioElement.removeEventListener("loadstart", onLoadStart);
-  }, [ws, audioElement]);
-
   // Hidden under the spectrum the waveform keeps its old zoom; it catches up when it shows again.
   useEffect(() => {
-    if (!ws || spectrumVisible || ws.options.minPxPerSec === zoom) return;
+    if (!ws || showSpectrum || ws.options.minPxPerSec === zoom) return;
     ws.setOptions({ minPxPerSec: zoom });
-  }, [ws, zoom, spectrumVisible]);
+  }, [ws, zoom, showSpectrum]);
 
   useEffect(() => {
     if (!ws) return;
@@ -182,7 +178,7 @@ const TimelineWaveform: React.FC = () => {
         data-waveform-redraw-bg
         className={cn(
           "absolute top-0 left-0 bg-(--well) border-b border-(--divider) pointer-events-none transition-opacity duration-200",
-          spectrumVisible && "opacity-0",
+          showSpectrum && "opacity-0",
         )}
         style={{ width: totalWidth, height: WAVEFORM_HEIGHT }}
       />
@@ -192,14 +188,14 @@ const TimelineWaveform: React.FC = () => {
         data-sweeping={sweeping ? "" : undefined}
         aria-hidden="true"
         className="absolute top-0 left-0 waveform-loading-dots pointer-events-none transition-opacity duration-200 ease-out"
-        style={{ width: totalWidth, height: WAVEFORM_HEIGHT - 1, opacity: ws || spectrumVisible ? 0 : 1 }}
+        style={{ width: totalWidth, height: WAVEFORM_HEIGHT - 1, opacity: ws || showSpectrum ? 0 : 1 }}
       />
       {audioElement && (
         <WaveformBars
           key={waveformKey}
           media={audioElement}
           width={totalWidth}
-          shown={ws !== null && !spectrumVisible}
+          shown={ws !== null && !showSpectrum}
           colors={initialColors}
           initialZoom={initialZoom}
           onDestroy={onDestroy}
@@ -213,7 +209,7 @@ const TimelineWaveform: React.FC = () => {
         aria-label={markerMode ? "Place snap point" : "Seek to position"}
         className={cn(
           "absolute top-0 left-0 z-10",
-          markerMode ? "waveform-armed" : altHeld || spectrumVisible ? "cursor-crosshair" : "cursor-pointer",
+          markerMode ? "waveform-armed" : altHeld || showSpectrum ? "cursor-crosshair" : "cursor-pointer",
         )}
         key="waveform-click-layer"
         style={{

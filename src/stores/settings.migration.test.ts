@@ -253,4 +253,38 @@ describe("spectrum and pitch settings", () => {
     await rehydrateAt(11, legacyBlob({ pitchLine: "focus" }));
     expect(useSettingsStore.getState().pitchLine).toBe("focus");
   });
+
+  it("moves the alignment model saved by the old default to the recommended one, but keeps a picked model", async () => {
+    await rehydrateAt(12, legacyBlob({ alignmentModelId: "hubertfa-v007" }));
+    expect(useSettingsStore.getState().alignmentModelId).toBe("recommended");
+    await rehydrateAt(12, legacyBlob({ alignmentModelId: "hubertfa-pt-run2-s3000" }));
+    expect(useSettingsStore.getState().alignmentModelId).toBe("hubertfa-pt-run2-s3000");
+  });
+});
+
+describe("timeline toggle renames", () => {
+  it("carries a saved defaultRollingEdit and defaultPreviewSidebar to the new keys", () => {
+    const migrated = migrateSettings(
+      legacyBlob({ defaultRollingEdit: true, defaultPreviewSidebar: true }),
+      12,
+    ) as Record<string, unknown>;
+    expect(migrated.rollingEdit).toBe(true);
+    expect(migrated.previewSidebar).toBe(true);
+    expect(migrated).not.toHaveProperty("defaultRollingEdit");
+    expect(migrated).not.toHaveProperty("defaultPreviewSidebar");
+  });
+
+  it("regression: carries the old keys for a profile already saved at version 13", async () => {
+    const {
+      rollingEdit: _rolling,
+      previewSidebar: _preview,
+      ...blob
+    } = legacyBlob({
+      defaultRollingEdit: true,
+      defaultPreviewSidebar: true,
+    });
+    await rehydrateAt(13, blob);
+    expect(useSettingsStore.getState().rollingEdit).toBe(true);
+    expect(useSettingsStore.getState().previewSidebar).toBe(true);
+  });
 });

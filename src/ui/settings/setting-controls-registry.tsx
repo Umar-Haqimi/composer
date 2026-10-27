@@ -1,15 +1,18 @@
+import { VOCAL_MODEL_APPROX_BYTES } from "@/audio/separation/model-registry";
 import { SPECTRUM_CONTRAST } from "@/domain/spectrum/settings";
 import { useSettingsStore } from "@/stores/settings";
 import type { SettingId } from "@/stores/settings-catalog";
 import { BEAT_GRID_LINE_OPTIONS } from "@/ui/beat-grid-line-options";
 import { LAUNCH_SCREEN_OPTIONS, LIBRARY_SORT_OPTIONS } from "@/ui/projects/library-options";
+import { AlignmentModelSetting } from "@/ui/settings/alignment-model-setting";
 import { BridgeSection } from "@/ui/settings/bridge-section";
 import { CobaltInstancesSetting } from "@/ui/settings/cobalt-instances-setting";
 import { DefaultPlaybackRateSetting } from "@/ui/settings/default-playback-rate-setting";
 import { LibraryViewSetting } from "@/ui/settings/library-view-setting";
 import { LlmProfilesSetting } from "@/ui/settings/llm-profiles-setting";
 import { ResetAllSettingsSetting, ResetTourSetting } from "@/ui/settings/reset-settings";
-import type { SelectOption, SliderAction } from "@/ui/settings/setting-controls";
+import type { SelectOption } from "@/ui/select";
+import type { SliderAction } from "@/ui/settings/setting-controls";
 import { SplitCharacterSetting } from "@/ui/settings/split-character-setting";
 import { BackUpAllProjectsSetting, DeleteAllProjectsSetting } from "@/ui/settings/storage/backup-settings-setting";
 import { ProjectAudioListSetting } from "@/ui/settings/storage/project-audio-list-setting";
@@ -26,6 +29,7 @@ import {
   SPECTRUM_SOURCE_OPTIONS,
   SPECTRUM_TOP_OPTIONS,
 } from "@/ui/spectrum-options";
+import { formatWholeMegabytes } from "@/utils/format-file-size";
 import { useTimelineStore } from "@/views/timeline/timeline-store";
 
 // -- Types ---------------------------------------------------------------------
@@ -79,10 +83,22 @@ const SETTING_CONTROLS: Record<SettingId, SettingControl> = {
   vocalModelVariant: {
     kind: "select",
     options: [
-      { value: "fp32", label: "fp32 (~171 MB, recommended)" },
-      { value: "fp16", label: "fp16 (~85 MB, experimental)" },
+      {
+        value: "fp32",
+        label: "fp32",
+        badge: "Recommended",
+        detail: `${formatWholeMegabytes(VOCAL_MODEL_APPROX_BYTES.fp32)} · Runs on every GPU`,
+      },
+      {
+        value: "fp16",
+        label: "fp16",
+        badge: "Experimental",
+        detail: `${formatWholeMegabytes(VOCAL_MODEL_APPROX_BYTES.fp16)} · Needs WebGPU shader-f16`,
+      },
     ],
   },
+  alignmentModelId: { kind: "custom", Component: AlignmentModelSetting },
+  keepAlignmentModelLoaded: TOGGLE,
   defaultZoom: {
     kind: "slider",
     min: 20,
@@ -118,9 +134,9 @@ const SETTING_CONTROLS: Record<SettingId, SettingControl> = {
   timelineSnapThreshold: { kind: "slider", min: 4, max: 24, step: 1, format: (v) => `${v}px` },
   snapPlayheadToPoints: TOGGLE,
   followPlayhead: TOGGLE,
-  defaultRollingEdit: TOGGLE,
+  rollingEdit: TOGGLE,
   syllablesFollowRolling: TOGGLE,
-  defaultPreviewSidebar: TOGGLE,
+  previewSidebar: TOGGLE,
   timelineHorizontalScroll: TOGGLE,
   pitchLine: { kind: "select", options: [...PITCH_LINE_OPTIONS] },
   showSpectrum: TOGGLE,

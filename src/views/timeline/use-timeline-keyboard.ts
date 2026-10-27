@@ -4,7 +4,6 @@ import { pickedTemplateSource } from "@/domain/group/template-source";
 import { instanceBounds } from "@/domain/instance/bounds";
 import { instanceCount, linesOfInstance } from "@/domain/instance/enumerate";
 import { isLinked } from "@/domain/instance/predicates";
-import { hasTransliteration } from "@/domain/language/has-transliteration";
 import { manualBackgroundWordEdit } from "@/domain/line/background";
 import { effectiveBounds } from "@/domain/line/bounds";
 import type { ReadableLine } from "@/domain/line/effective-words";
@@ -48,6 +47,7 @@ import { clearLoopRegion, playSelection } from "@/views/timeline/selection-playb
 import { adjacentSnapPoint } from "@/views/timeline/snap-marker-math";
 import { splitLinesIntoWords } from "@/views/timeline/split-lines-into-words";
 import { GUTTER_WIDTH, useTimelineStore } from "@/views/timeline/timeline-store";
+import { AUTO_ALIGN_EVENT } from "@/views/timeline/timeline-auto-align";
 import { useTimelineClipboard } from "@/views/timeline/use-timeline-clipboard";
 import { computeRowLayout, partitionNudgeSelections, shiftSelectionsTogether } from "@/views/timeline/utils";
 import { findBoundaryTarget, findWordsAtTime, pickNextWordAtPlayhead } from "@/views/timeline/word-at-playhead";
@@ -167,7 +167,7 @@ function useTimelineKeyboard(
         time: currentTime,
         minDuration: useSettingsStore.getState().minWordDuration,
         range: timeRangeResolver(useProjectStore.getState().lines, useProjectStore.getState().groups, duration)(line),
-        rolling: useTimelineStore.getState().rollingEditMode,
+        rolling: useSettingsStore.getState().rollingEdit,
         syllablesFollowRolling: useSettingsStore.getState().syllablesFollowRolling,
         updateLineWithHistory: useProjectStore.getState().updateLineWithHistory,
       });
@@ -323,10 +323,10 @@ function useTimelineKeyboard(
           if (playSelection()) e.preventDefault();
           break;
         case "timeline.toggleFollow":
-          useTimelineStore.getState().toggleFollow();
+          useSettingsStore.getState().toggle("followPlayhead");
           break;
         case "timeline.togglePreview":
-          useTimelineStore.getState().togglePreviewSidebar();
+          useSettingsStore.getState().toggle("previewSidebar");
           break;
         case "timeline.copy":
           e.preventDefault();
@@ -340,28 +340,29 @@ function useTimelineKeyboard(
           e.preventDefault();
           handlePaste();
           break;
-        case "timeline.toggleSnap": {
-          const s = useSettingsStore.getState();
-          s.set("timelineSnap", !s.timelineSnap);
+        case "timeline.toggleSnap":
+          useSettingsStore.getState().toggle("timelineSnap");
           break;
-        }
         case "timeline.toggleBeatGrid": {
           if (!useProjectStore.getState().beatGrid) {
             toast(NO_BEAT_GRID_MESSAGE);
             break;
           }
-          const s = useSettingsStore.getState();
-          s.set("beatGridVisible", !s.beatGridVisible);
+          useSettingsStore.getState().toggle("beatGridVisible");
           break;
         }
         case "timeline.toggleSpectrum":
-          useTimelineStore.getState().toggleSpectrum();
+          useSettingsStore.getState().toggle("showSpectrum");
+          break;
+        case "timeline.autoAlign":
+          e.preventDefault();
+          window.dispatchEvent(new CustomEvent(AUTO_ALIGN_EVENT));
           break;
         case "timeline.togglePitchLine":
           togglePitchLine();
           break;
         case "timeline.toggleRollingEdit":
-          useTimelineStore.getState().toggleRollingEditMode();
+          useSettingsStore.getState().toggle("rollingEdit");
           break;
         case "timeline.toggleMarkerMode":
           e.preventDefault();
@@ -374,7 +375,7 @@ function useTimelineKeyboard(
           break;
         }
         case "timeline.toggleTextVariant":
-          if (hasTransliteration(useProjectStore.getState().lines)) useTimelineStore.getState().toggleTextVariant();
+          useTimelineStore.getState().toggleTextVariant();
           break;
         case "timeline.setWordBegin":
           e.preventDefault();
@@ -752,7 +753,7 @@ function useTimelineKeyboard(
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleSetWordTiming, handleCopy, handleCut, handlePaste, onOpenLyricsModal, lines]);
+  }, [handleSetWordTiming, handleCopy, handleCut, handlePaste, onOpenLyricsModal, lines, duration, scrollContainerRef]);
 }
 
 // -- Exports -------------------------------------------------------------------

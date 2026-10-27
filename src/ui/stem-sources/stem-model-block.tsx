@@ -1,74 +1,52 @@
-import { getModelDescriptor } from "@/audio/separation/model-registry";
+import { VOCAL_MODEL_APPROX_BYTES } from "@/audio/separation/model-registry";
 import type { SeparationError } from "@/audio/separation/types";
 import { STEM_SLOTS } from "@/domain/stems/stem-slot";
 import { useSeparationStore } from "@/stores/separation";
 import { useSettingsStore } from "@/stores/settings";
 import { Button } from "@/ui/button";
-import { ProgressBar } from "@/ui/progress-bar";
+import { ModelErrorNotice } from "@/ui/model-error-notice";
+import { ModelProgress } from "@/ui/model-progress";
 import { STEM_LABELS } from "@/ui/stem-labels";
-import { COMPACT_BUTTON } from "@/ui/stem-sources/compact-button";
 import { separationErrorCopy } from "@/ui/stem-sources/separation-error-copy";
-import { StemNotice } from "@/ui/stem-sources/stem-notice";
-
-// -- Constants ----------------------------------------------------------------
-
-const FALLBACK_MODEL_MB = 85;
+import { formatMegabytesOf, formatWholeMegabytes } from "@/utils/format-file-size";
+import { percent } from "@/utils/percent";
 
 // -- Components ---------------------------------------------------------------
 
 const Separator: React.FC = () => <div className="h-px my-2.5 bg-(--divider)" />;
 
-const ModelProgress: React.FC<{ title: string; keepsImported: boolean }> = ({ title, keepsImported }) => {
-  const progress = useSeparationStore((s) => s.progress);
-  const pct = progress.total > 0 ? Math.round((progress.loaded / progress.total) * 100) : 0;
+const ModelError: React.FC<{ error: SeparationError }> = ({ error }) => {
+  const { retry, dismissError } = useSeparationStore.getState();
   return (
-    <div>
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="text-[13px] font-medium text-composer-text">{title}</span>
-        <span className="text-xs tabular-nums text-composer-accent-text">{pct}%</span>
-      </div>
-      <ProgressBar percent={pct} label={title} className="mt-2.5" />
-      <div className="flex items-center justify-between gap-3 mt-3">
-        <p className="text-xs leading-[1.45] text-(--muted) text-pretty">
-          {keepsImported && "Your imported stems stay as they are."}
-        </p>
-        <Button
-          size="sm"
-          variant="secondary"
-          className={COMPACT_BUTTON}
-          onClick={() => useSeparationStore.getState().cancel()}
-        >
-          Cancel
-        </Button>
-      </div>
-    </div>
+    <ModelErrorNotice
+      {...separationErrorCopy(error.code)}
+      message={error.message}
+      onDismiss={dismissError}
+      onRetry={() => void retry()}
+      className="-mx-1.5"
+    />
   );
 };
 
-const ModelError: React.FC<{ error: SeparationError }> = ({ error }) => {
-  const { title, next } = separationErrorCopy(error.code);
-  const { retry, dismissError } = useSeparationStore.getState();
+// The stem popover still insets 14px; -mx-2 brings the progress to the pop layout's 6px.
+const StemProgress: React.FC<{ downloading: boolean; fills: string; approxBytes: number }> = ({
+  downloading,
+  fills,
+  approxBytes,
+}) => {
+  const progress = useSeparationStore((s) => s.progress);
+  const keepsImported = useSeparationStore((s) => STEM_SLOTS.some((slot) => s.stemOrigins[slot] === "imported"));
+  const pct = percent(progress.loaded, progress.total);
   return (
-    <StemNotice
-      tone="negative"
-      className="-mx-1.5"
-      actions={
-        <>
-          <Button size="sm" variant="ghost" className={COMPACT_BUTTON} onClick={dismissError}>
-            Dismiss
-          </Button>
-          <Button size="sm" variant="primary" className={COMPACT_BUTTON} onClick={() => void retry()}>
-            Try again
-          </Button>
-        </>
-      }
-    >
-      <p className="text-[13px] font-medium leading-[1.35] text-composer-text text-pretty">{title}</p>
-      <p className="mt-0.5 text-xs leading-[1.45] text-(--label) text-pretty">{next}</p>
-      <p className="mt-1.5 text-xs leading-[1.45] text-(--muted) wrap-break-word select-text cursor-text">
-        {error.message}
-      </p>
-    </StemNotice>
+    <div className="-mx-2">
+      <ModelProgress
+        title={downloading ? "Downloading model…" : fills ? `Separating ${fills}…` : "Separating…"}
+        meta={downloading ? formatMegabytesOf(progress.loaded, progress.total || approxBytes) : `${pct}%`}
+        pct={pct}
+        note={keepsImported && "Your imported stems stay as they are."}
+        onCancel={() => useSeparationStore.getState().cancel()}
+      />
+    </div>
   );
 };
 
@@ -76,10 +54,9 @@ const StemModelBlock: React.FC = () => {
   const status = useSeparationStore((s) => s.status);
   const error = useSeparationStore((s) => s.error);
   const stemUrls = useSeparationStore((s) => s.stemUrls);
-  const stemOrigins = useSeparationStore((s) => s.stemOrigins);
   const modelCached = useSeparationStore((s) => s.modelCached);
   const hostingConfigured = useSeparationStore((s) => s.hostingConfigured);
-  const approxMb = useSettingsStore((s) => getModelDescriptor(s.vocalModelVariant)?.approxMb ?? FALLBACK_MODEL_MB);
+  const approxBytes = useSettingsStore((s) => VOCAL_MODEL_APPROX_BYTES[s.vocalModelVariant]);
 
   const emptySlots = STEM_SLOTS.filter((slot) => stemUrls[slot] === undefined);
   const fills = emptySlots.map((slot) => STEM_LABELS[slot].toLowerCase()).join(" and ");
@@ -95,13 +72,10 @@ const StemModelBlock: React.FC = () => {
   }
 
   if (status === "downloading" || status === "processing") {
-    const separating = fills ? `Separating ${fills}…` : "Separating…";
-    const title = status === "downloading" ? "Downloading model…" : separating;
-    const keepsImported = STEM_SLOTS.some((slot) => stemOrigins[slot] === "imported");
     return (
       <>
         <Separator />
-        <ModelProgress title={title} keepsImported={keepsImported} />
+        <StemProgress downloading={status === "downloading"} fills={fills} approxBytes={approxBytes} />
       </>
     );
   }
@@ -115,7 +89,7 @@ const StemModelBlock: React.FC = () => {
           <p className="text-[13px] font-medium text-composer-text">Separate with the vocal model</p>
           <p className="mt-0.5 text-xs leading-[1.45] text-(--muted) text-pretty">
             Makes the {fills} from this song.
-            {!modelCached && ` Needs a one-time ${approxMb}\u00a0MB download.`}
+            {!modelCached && ` Needs a one-time ${formatWholeMegabytes(approxBytes)} download.`}
           </p>
         </div>
         <Button

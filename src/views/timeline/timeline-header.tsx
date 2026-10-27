@@ -5,15 +5,13 @@ import type { WordTiming } from "@/domain/word/timing";
 import { useAudioStore } from "@/stores/audio";
 import { useProjectStore } from "@/stores/project";
 import { useSettingsStore } from "@/stores/settings";
-import { getEffectiveKeysArray } from "@/stores/shortcut-bindings";
-import { Button } from "@/ui/button";
-import { InlineKeyBadge } from "@/ui/inline-key-badge";
-import { ShortcutTip } from "@/ui/shortcut-tip";
 import { ShortcutToggleButton } from "@/ui/shortcut-toggle-button";
-import { Tooltip, TooltipGroup } from "@/ui/tooltip";
+import { TooltipGroup } from "@/ui/tooltip";
 import { convertLineToWord, splitIntoWordsWithMeta } from "@/utils/sync-helpers";
+import { HeaderAction } from "@/views/timeline/header-action";
 import { SnapLatch } from "@/views/timeline/snap-latch";
 import { SpectrumLatch } from "@/views/timeline/spectrum/spectrum-latch";
+import { TimelineAutoAlign } from "@/views/timeline/timeline-auto-align";
 import { TimelineZoomControls } from "@/views/timeline/timeline-header-controls";
 import { TimelineNotices } from "@/views/timeline/timeline-notices";
 import { useTimelineStore } from "@/views/timeline/timeline-store";
@@ -36,12 +34,9 @@ interface TimelineHeaderProps {
 }
 
 const TimelineHeader: React.FC<TimelineHeaderProps> = ({ onImportLyrics, scrollContainerRef }) => {
-  const followEnabled = useTimelineStore((s) => s.followEnabled);
-  const toggleFollow = useTimelineStore((s) => s.toggleFollow);
-  const previewSidebarOpen = useTimelineStore((s) => s.previewSidebarOpen);
-  const togglePreviewSidebar = useTimelineStore((s) => s.togglePreviewSidebar);
-  const rollingEditMode = useTimelineStore((s) => s.rollingEditMode);
-  const toggleRollingEditMode = useTimelineStore((s) => s.toggleRollingEditMode);
+  const followPlayhead = useSettingsStore((s) => s.followPlayhead);
+  const previewSidebar = useSettingsStore((s) => s.previewSidebar);
+  const rollingEdit = useSettingsStore((s) => s.rollingEdit);
   const markerMode = useTimelineStore((s) => s.markerMode);
   const toggleMarkerMode = useTimelineStore((s) => s.toggleMarkerMode);
   const showHints = useSettingsStore((s) => s.showShortcutHints);
@@ -148,29 +143,29 @@ const TimelineHeader: React.FC<TimelineHeaderProps> = ({ onImportLyrics, scrollC
 
           <div className="tray">
             <ShortcutToggleButton
-              active={followEnabled}
+              active={followPlayhead}
               label="Follow"
               shortcut="timeline.toggleFollow"
-              onClick={toggleFollow}
+              onClick={() => useSettingsStore.getState().toggle("followPlayhead")}
               iconOnly
             >
               <IconFocusCentered />
             </ShortcutToggleButton>
             <ShortcutToggleButton
-              active={rollingEditMode}
+              active={rollingEdit}
               label="Rolling"
               shortcut="timeline.toggleRollingEdit"
-              onClick={toggleRollingEditMode}
+              onClick={() => useSettingsStore.getState().toggle("rollingEdit")}
               description="Rolling edit: drag a shared word boundary and both words move together"
               iconOnly
             >
               <IconArrowBarBoth />
             </ShortcutToggleButton>
             <ShortcutToggleButton
-              active={previewSidebarOpen}
+              active={previewSidebar}
               label="Preview"
               shortcut="timeline.togglePreview"
-              onClick={togglePreviewSidebar}
+              onClick={() => useSettingsStore.getState().toggle("previewSidebar")}
               iconOnly
             >
               <IconEye />
@@ -193,6 +188,8 @@ const TimelineHeader: React.FC<TimelineHeaderProps> = ({ onImportLyrics, scrollC
           <div className="tray">
             <SpectrumLatch />
           </div>
+
+          <TimelineAutoAlign />
 
           {onImportLyrics && (
             <HeaderAction onClick={onImportLyrics} label="Import" shortcut="timeline.importLyrics" showHint={showHints}>
@@ -232,29 +229,6 @@ const TimelineHeader: React.FC<TimelineHeaderProps> = ({ onImportLyrics, scrollC
     </TooltipGroup>
   );
 };
-
-const HeaderAction: React.FC<{
-  onClick: () => void;
-  label: string;
-  shortcut: string;
-  showHint: boolean;
-  description?: string;
-  children: React.ReactNode;
-}> = ({ onClick, label, shortcut, showHint, description, children }) => (
-  <Tooltip content={<ShortcutTip label={label} shortcut={shortcut} description={description} />} placement="bottom">
-    <Button
-      variant="ghost"
-      size="lg"
-      hasIcon
-      onClick={onClick}
-      aria-label={label}
-      className="shrink-0 min-w-9 gap-1 px-2 [&>svg]:size-4 [&>[data-inline-key-badge]]:ml-0"
-    >
-      {children}
-      {showHint && <InlineKeyBadge keys={getEffectiveKeysArray(shortcut)} />}
-    </Button>
-  </Tooltip>
-);
 
 // -- Exports -------------------------------------------------------------------
 

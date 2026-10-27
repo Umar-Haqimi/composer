@@ -1,3 +1,4 @@
+import { RECOMMENDED_ALIGNMENT_MODEL } from "@/audio/alignment/hubertfa/model-manifest";
 import type { MusicBrainzLookup } from "@/domain/musicbrainz/lookup-mode";
 import { DEFAULT_PITCH_LINE_MODE, type PitchLineMode } from "@/domain/pitch/pitch-line-mode";
 import type { LibrarySort } from "@/domain/project/library-order";
@@ -5,6 +6,7 @@ import type { LaunchScreen, LibraryView } from "@/domain/project/library-prefere
 import { SPECTRUM_SETTING_DEFAULTS, type SpectrumSettings } from "@/domain/spectrum/settings";
 import type { KeepYouTubeAudio } from "@/domain/storage/audio-retention";
 import type { StorageLimit } from "@/domain/storage/storage-limit";
+import { DEFAULT_COBALT_INSTANCE_ID, cobaltActions } from "@/stores/settings-cobalt";
 import {
   LLM_PROFILES_DEFAULTS,
   type LlmProfilesActions,
@@ -26,6 +28,9 @@ type GranularityDefault = "word" | "line";
 type LinkedDivergenceAction = "ask" | "apply" | "detach";
 type PreviewRenderer = "braccato" | "am-lyrics";
 type VocalModelVariant = "fp16" | "fp32";
+type BooleanSettingKey = {
+  [K in keyof SettingsState]: SettingsState[K] extends boolean ? K : never;
+}[keyof SettingsState];
 
 interface ExperimentFlags {
   youtubeBridge: boolean;
@@ -43,8 +48,6 @@ interface CobaltInstanceStatus {
   at: number;
 }
 
-const DEFAULT_COBALT_INSTANCE_ID = "default";
-
 interface SettingsState extends LlmProfilesState, SnapSettings, SpectrumSettings, SyncTapSettings {
   pitchLine: PitchLineMode;
   defaultPlaybackRate: number;
@@ -58,8 +61,8 @@ interface SettingsState extends LlmProfilesState, SnapSettings, SpectrumSettings
   defaultZoom: number;
   defaultRowHeight: number;
   followPlayhead: boolean;
-  defaultRollingEdit: boolean;
-  defaultPreviewSidebar: boolean;
+  rollingEdit: boolean;
+  previewSidebar: boolean;
   previewSidebarWidth: number;
   shareTimingInNewGroups: boolean;
   loopOpenGroup: boolean;
@@ -108,6 +111,8 @@ interface SettingsState extends LlmProfilesState, SnapSettings, SpectrumSettings
 
   autoSeparateOnImport: boolean;
   vocalModelVariant: VocalModelVariant;
+  alignmentModelId: string;
+  keepAlignmentModelLoaded: boolean;
 
   cobaltInstances: CobaltInstance[];
   selectedCobaltInstanceId: string;
@@ -119,6 +124,7 @@ interface SettingsState extends LlmProfilesState, SnapSettings, SpectrumSettings
 
 interface SettingsActions extends LlmProfilesActions {
   set: <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => void;
+  toggle: (key: BooleanSettingKey) => void;
   resetToDefaults: () => void;
   addCobaltInstance: (instance: Omit<CobaltInstance, "id">) => void;
   updateCobaltInstance: (id: string, updates: Partial<Omit<CobaltInstance, "id">>) => void;
@@ -144,8 +150,8 @@ const DEFAULTS: SettingsState = {
   defaultZoom: 100,
   defaultRowHeight: 44,
   followPlayhead: true,
-  defaultRollingEdit: false,
-  defaultPreviewSidebar: false,
+  rollingEdit: false,
+  previewSidebar: false,
   previewSidebarWidth: PREVIEW_SIDEBAR_WIDTH.default,
   shareTimingInNewGroups: true,
   loopOpenGroup: false,
@@ -195,6 +201,8 @@ const DEFAULTS: SettingsState = {
 
   autoSeparateOnImport: false,
   vocalModelVariant: "fp32",
+  alignmentModelId: RECOMMENDED_ALIGNMENT_MODEL,
+  keepAlignmentModelLoaded: false,
 
   cobaltInstances: [],
   selectedCobaltInstanceId: DEFAULT_COBALT_INSTANCE_ID,
@@ -220,6 +228,7 @@ const useSettingsStore = create<SettingsState & SettingsActions>()(
       ...llmProfilesActions(set),
 
       set: (key, value) => set({ [key]: value }),
+      toggle: (key) => set((state) => ({ [key]: !state[key] })),
       resetToDefaults: () =>
         set((state) => ({
           ...DEFAULTS,
@@ -241,34 +250,7 @@ const useSettingsStore = create<SettingsState & SettingsActions>()(
           llmProfiles: state.llmProfiles,
           translationProvider: state.translationProvider,
         })),
-      addCobaltInstance: (instance) =>
-        set((state) => {
-          const id = crypto.randomUUID();
-          return { cobaltInstances: [...state.cobaltInstances, { ...instance, id }] };
-        }),
-      updateCobaltInstance: (id, updates) =>
-        set((state) => ({
-          cobaltInstances: state.cobaltInstances.map((i) => (i.id === id ? { ...i, ...updates } : i)),
-        })),
-      removeCobaltInstance: (id) =>
-        set((state) => {
-          const nextStatus = { ...state.cobaltInstanceStatus };
-          delete nextStatus[id];
-          return {
-            cobaltInstances: state.cobaltInstances.filter((i) => i.id !== id),
-            selectedCobaltInstanceId:
-              state.selectedCobaltInstanceId === id ? DEFAULT_COBALT_INSTANCE_ID : state.selectedCobaltInstanceId,
-            cobaltInstanceStatus: nextStatus,
-          };
-        }),
-      selectCobaltInstance: (id) => set({ selectedCobaltInstanceId: id }),
-      recordCobaltInstanceResult: (id, status, errorMessage) =>
-        set((state) => ({
-          cobaltInstanceStatus: {
-            ...state.cobaltInstanceStatus,
-            [id]: { status, errorMessage, at: Date.now() },
-          },
-        })),
+      ...cobaltActions(set),
     }),
     { name: "composer-settings", version: SETTINGS_PERSIST_VERSION, migrate: migrateSettings },
   ),
@@ -297,4 +279,4 @@ export {
   getActiveCobaltInstance,
   isUsingDefaultCobaltInstance,
 };
-export type { SettingsState, CobaltInstanceStatus, VocalModelVariant };
+export type { BooleanSettingKey, SettingsState, CobaltInstanceStatus, VocalModelVariant };

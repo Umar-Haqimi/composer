@@ -1,13 +1,15 @@
+import type { LanguageTextVariant } from "@/domain/language/display";
 import { Button } from "@/ui/button";
 import { SegmentedControl } from "@/ui/segmented-control";
 import { ShortcutToggleButton } from "@/ui/shortcut-toggle-button";
+import { AutoAlignDropdown } from "@/views/sync/auto-align-dropdown";
 import { IconLanguage, IconLock, IconLockOpen, IconPlayerPlayFilled, IconRefresh } from "@tabler/icons-react";
 
 // -- Interfaces ---------------------------------------------------------------
 
 interface SyncHeaderProps {
   progress: { done: number; total: number };
-  textVariant: "original" | "transliteration";
+  textVariant: LanguageTextVariant;
   hasTransliteration: boolean;
   toggleTextVariant: () => void;
   granularity: "line" | "word";
@@ -68,6 +70,7 @@ const SyncHeader: React.FC<SyncHeaderProps> = ({
           options={GRANULARITY_OPTIONS}
           onChange={handleGranularityChange}
         />
+        <AutoAlignDropdown disabled={editMode} />
         <Button
           hasIcon
           size="lg"
