@@ -20,6 +20,9 @@ type GranularityDefault = "word" | "line";
 type LinkedDivergenceAction = "ask" | "apply" | "detach";
 type PreviewRenderer = "braccato" | "am-lyrics";
 type VocalModelVariant = "fp16" | "fp32";
+type BooleanSettingKey = {
+  [K in keyof SettingsState]: SettingsState[K] extends boolean ? K : never;
+}[keyof SettingsState];
 
 interface ExperimentFlags {
   youtubeBridge: boolean;
@@ -52,8 +55,8 @@ interface SettingsState extends SnapSettings, SpectrumSettings {
   defaultZoom: number;
   defaultRowHeight: number;
   followPlayhead: boolean;
-  defaultRollingEdit: boolean;
-  defaultPreviewSidebar: boolean;
+  rollingEdit: boolean;
+  previewSidebar: boolean;
   previewSidebarWidth: number;
   shareTimingInNewGroups: boolean;
   loopOpenGroup: boolean;
@@ -115,6 +118,7 @@ interface SettingsState extends SnapSettings, SpectrumSettings {
 
 interface SettingsActions {
   set: <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => void;
+  toggle: (key: BooleanSettingKey) => void;
   resetToDefaults: () => void;
   addCobaltInstance: (instance: Omit<CobaltInstance, "id">) => void;
   updateCobaltInstance: (id: string, updates: Partial<Omit<CobaltInstance, "id">>) => void;
@@ -140,8 +144,8 @@ const DEFAULTS: SettingsState = {
   defaultZoom: 100,
   defaultRowHeight: 44,
   followPlayhead: true,
-  defaultRollingEdit: false,
-  defaultPreviewSidebar: false,
+  rollingEdit: false,
+  previewSidebar: false,
   previewSidebarWidth: PREVIEW_SIDEBAR_WIDTH.default,
   shareTimingInNewGroups: true,
   loopOpenGroup: false,
@@ -215,6 +219,7 @@ const useSettingsStore = create<SettingsState & SettingsActions>()(
       ...DEFAULTS,
 
       set: (key, value) => set({ [key]: value }),
+      toggle: (key) => set((state) => ({ [key]: !state[key] })),
       resetToDefaults: () =>
         set((state) => ({
           ...DEFAULTS,
@@ -290,4 +295,4 @@ export {
   getActiveCobaltInstance,
   isUsingDefaultCobaltInstance,
 };
-export type { SettingsState, CobaltInstanceStatus, VocalModelVariant };
+export type { BooleanSettingKey, SettingsState, CobaltInstanceStatus, VocalModelVariant };

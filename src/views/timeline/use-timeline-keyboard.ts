@@ -168,7 +168,7 @@ function useTimelineKeyboard(
         time: currentTime,
         minDuration: useSettingsStore.getState().minWordDuration,
         range: timeRangeResolver(useProjectStore.getState().lines, useProjectStore.getState().groups, duration)(line),
-        rolling: useTimelineStore.getState().rollingEditMode,
+        rolling: useSettingsStore.getState().rollingEdit,
         syllablesFollowRolling: useSettingsStore.getState().syllablesFollowRolling,
         updateLineWithHistory: useProjectStore.getState().updateLineWithHistory,
       });
@@ -324,10 +324,10 @@ function useTimelineKeyboard(
           if (playSelection()) e.preventDefault();
           break;
         case "timeline.toggleFollow":
-          useTimelineStore.getState().toggleFollow();
+          useSettingsStore.getState().toggle("followPlayhead");
           break;
         case "timeline.togglePreview":
-          useTimelineStore.getState().togglePreviewSidebar();
+          useSettingsStore.getState().toggle("previewSidebar");
           break;
         case "timeline.copy":
           e.preventDefault();
@@ -341,22 +341,19 @@ function useTimelineKeyboard(
           e.preventDefault();
           handlePaste();
           break;
-        case "timeline.toggleSnap": {
-          const s = useSettingsStore.getState();
-          s.set("timelineSnap", !s.timelineSnap);
+        case "timeline.toggleSnap":
+          useSettingsStore.getState().toggle("timelineSnap");
           break;
-        }
         case "timeline.toggleBeatGrid": {
           if (!useProjectStore.getState().beatGrid) {
             toast(NO_BEAT_GRID_MESSAGE);
             break;
           }
-          const s = useSettingsStore.getState();
-          s.set("beatGridVisible", !s.beatGridVisible);
+          useSettingsStore.getState().toggle("beatGridVisible");
           break;
         }
         case "timeline.toggleSpectrum":
-          useTimelineStore.getState().toggleSpectrum();
+          useSettingsStore.getState().toggle("showSpectrum");
           break;
         case "timeline.autoAlign":
           e.preventDefault();
@@ -366,7 +363,7 @@ function useTimelineKeyboard(
           togglePitchLine();
           break;
         case "timeline.toggleRollingEdit":
-          useTimelineStore.getState().toggleRollingEditMode();
+          useSettingsStore.getState().toggle("rollingEdit");
           break;
         case "timeline.toggleMarkerMode":
           e.preventDefault();
@@ -757,7 +754,7 @@ function useTimelineKeyboard(
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleSetWordTiming, handleCopy, handleCut, handlePaste, onOpenLyricsModal, lines]);
+  }, [handleSetWordTiming, handleCopy, handleCut, handlePaste, onOpenLyricsModal, lines, duration, scrollContainerRef]);
 }
 
 // -- Exports -------------------------------------------------------------------

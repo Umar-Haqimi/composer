@@ -37,12 +37,9 @@ interface TimelineHeaderProps {
 }
 
 const TimelineHeader: React.FC<TimelineHeaderProps> = ({ onImportLyrics, scrollContainerRef }) => {
-  const followEnabled = useTimelineStore((s) => s.followEnabled);
-  const toggleFollow = useTimelineStore((s) => s.toggleFollow);
-  const previewSidebarOpen = useTimelineStore((s) => s.previewSidebarOpen);
-  const togglePreviewSidebar = useTimelineStore((s) => s.togglePreviewSidebar);
-  const rollingEditMode = useTimelineStore((s) => s.rollingEditMode);
-  const toggleRollingEditMode = useTimelineStore((s) => s.toggleRollingEditMode);
+  const followPlayhead = useSettingsStore((s) => s.followPlayhead);
+  const previewSidebar = useSettingsStore((s) => s.previewSidebar);
+  const rollingEdit = useSettingsStore((s) => s.rollingEdit);
   const markerMode = useTimelineStore((s) => s.markerMode);
   const toggleMarkerMode = useTimelineStore((s) => s.toggleMarkerMode);
   const showHints = useSettingsStore((s) => s.showShortcutHints);
@@ -149,29 +146,29 @@ const TimelineHeader: React.FC<TimelineHeaderProps> = ({ onImportLyrics, scrollC
 
           <div className="tray">
             <ShortcutToggleButton
-              active={followEnabled}
+              active={followPlayhead}
               label="Follow"
               shortcut="timeline.toggleFollow"
-              onClick={toggleFollow}
+              onClick={() => useSettingsStore.getState().toggle("followPlayhead")}
               iconOnly
             >
               <IconFocusCentered />
             </ShortcutToggleButton>
             <ShortcutToggleButton
-              active={rollingEditMode}
+              active={rollingEdit}
               label="Rolling"
               shortcut="timeline.toggleRollingEdit"
-              onClick={toggleRollingEditMode}
+              onClick={() => useSettingsStore.getState().toggle("rollingEdit")}
               description="Rolling edit: drag a shared word boundary and both words move together"
               iconOnly
             >
               <IconArrowBarBoth />
             </ShortcutToggleButton>
             <ShortcutToggleButton
-              active={previewSidebarOpen}
+              active={previewSidebar}
               label="Preview"
               shortcut="timeline.togglePreview"
-              onClick={togglePreviewSidebar}
+              onClick={() => useSettingsStore.getState().toggle("previewSidebar")}
               iconOnly
             >
               <IconEye />

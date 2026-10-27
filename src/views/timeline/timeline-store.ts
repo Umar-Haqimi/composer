@@ -1,3 +1,4 @@
+import type { LanguageTextVariant } from "@/domain/language/display";
 import type { ResumePosition } from "@/domain/project/resume-position";
 import type { LoopRegion } from "@/domain/selection/loop-region";
 import type { WordSelection } from "@/domain/selection/model";
@@ -44,9 +45,7 @@ interface LoopRegionDrag {
 
 interface TimelineState {
   zoom: number;
-  followEnabled: boolean;
-  previewSidebarOpen: boolean;
-  textVariant: "original" | "transliteration";
+  textVariant: LanguageTextVariant;
   selectedWords: WordSelection[];
   selectionPlayback: SelectionPlaybackMode | null;
   loopRegion: LoopRegion | null;
@@ -63,8 +62,6 @@ interface TimelineState {
   dragTime: number;
   contextMenu: ContextMenuState | null;
   editingWord: EditingWord | null;
-  rollingEditMode: boolean;
-  spectrumVisible: boolean;
   markerMode: boolean;
   hoveredSnapPointId: string | null;
   collapsedInstances: Record<string, boolean>;
@@ -88,9 +85,8 @@ interface TimelineActions {
   setZoom: (zoom: number) => void;
   zoomIn: () => void;
   zoomOut: () => void;
-  toggleFollow: () => void;
-  togglePreviewSidebar: () => void;
   toggleTextVariant: () => void;
+  setTextVariant: (textVariant: LanguageTextVariant) => void;
   setSelectedWords: (selections: WordSelection[]) => void;
   setSelectionPlayback: (mode: SelectionPlaybackMode | null) => void;
   setLoopRegion: (region: LoopRegion | null) => void;
@@ -111,8 +107,6 @@ interface TimelineActions {
   setEditingWord: (editing: EditingWord | null) => void;
   clearEditingWord: () => void;
   resetProjectScope: () => void;
-  toggleRollingEditMode: () => void;
-  toggleSpectrum: () => void;
   toggleMarkerMode: () => void;
   setHoveredSnapPointId: (id: string | null) => void;
   setInstanceCollapsed: (key: string, isCollapsed: boolean) => void;
@@ -148,8 +142,6 @@ const useTimelineStore = create<TimelineState & TimelineActions>((set, get) => {
   const settings = useSettingsStore.getState();
   return {
     zoom: settings.defaultZoom,
-    followEnabled: settings.followPlayhead,
-    previewSidebarOpen: settings.defaultPreviewSidebar,
     textVariant: "original",
     selectedWords: [],
     selectionPlayback: null,
@@ -167,8 +159,6 @@ const useTimelineStore = create<TimelineState & TimelineActions>((set, get) => {
     dragTime: 0,
     contextMenu: null,
     editingWord: null,
-    rollingEditMode: settings.defaultRollingEdit,
-    spectrumVisible: settings.showSpectrum,
     markerMode: false,
     hoveredSnapPointId: null,
     collapsedInstances: {},
@@ -190,10 +180,9 @@ const useTimelineStore = create<TimelineState & TimelineActions>((set, get) => {
     setZoom: (zoom) => set({ zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom)) }),
     zoomIn: () => set((s) => ({ zoom: Math.min(MAX_ZOOM, s.zoom + ZOOM_STEP) })),
     zoomOut: () => set((s) => ({ zoom: Math.max(MIN_ZOOM, s.zoom - ZOOM_STEP) })),
-    toggleFollow: () => set((s) => ({ followEnabled: !s.followEnabled })),
-    togglePreviewSidebar: () => set((s) => ({ previewSidebarOpen: !s.previewSidebarOpen })),
     toggleTextVariant: () =>
       set((s) => ({ textVariant: s.textVariant === "original" ? "transliteration" : "original" })),
+    setTextVariant: (textVariant) => set({ textVariant }),
     setSelectedWords: (selectedWords) =>
       set(selectedWords.length > 0 ? { selectedWords, loopRegion: null } : { selectedWords }),
     setSelectionPlayback: (selectionPlayback) => set({ selectionPlayback }),
@@ -235,9 +224,8 @@ const useTimelineStore = create<TimelineState & TimelineActions>((set, get) => {
         scrollTop: null,
         pendingResumeView: null,
         focusedGroup: null,
+        textVariant: "original",
       }),
-    toggleRollingEditMode: () => set((s) => ({ rollingEditMode: !s.rollingEditMode })),
-    toggleSpectrum: () => set((s) => ({ spectrumVisible: !s.spectrumVisible })),
     toggleMarkerMode: () => set((s) => ({ markerMode: !s.markerMode })),
     setHoveredSnapPointId: (hoveredSnapPointId) => set({ hoveredSnapPointId }),
     setInstanceCollapsed: (key, isCollapsed) =>
