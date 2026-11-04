@@ -1,20 +1,11 @@
 import { useFrameLoop } from "@/hooks/use-frame-loop";
 import { livePlaybackTime, useAudioStore } from "@/stores/audio";
-import { useProjectStore } from "@/stores/project";
-import { useSettingsStore } from "@/stores/settings";
-import { getBannerNodes } from "@/views/timeline/banner-progress-registry";
-import { GUTTER_WIDTH, timeToX } from "@/views/timeline/coords";
-import { currentFocusScrollRange } from "@/views/timeline/effective-focus";
-import { createFollowInput, fillFollowInput } from "@/views/timeline/follow-input";
-import { clampScrollLeft } from "@/views/timeline/group-focus";
+import { GUTTER_WIDTH } from "@/views/timeline/coords";
+import { CueFlash } from "@/views/timeline/cue-flash";
+import { createPlayheadFrame, readPlayheadFrame, writePlayheadFrame } from "@/views/timeline/playhead-frame";
 import { createPlayheadDrag } from "@/views/timeline/playhead-drag";
 import { snapPlayheadTime } from "@/views/timeline/playhead-snap";
-import { createRowLayoutCache } from "@/views/timeline/row-layout-cache";
-import { createTimelineLights, paintTimelineLights } from "@/views/timeline/timeline-lights";
-import { buildPlayheadMask, playheadMaskRoot } from "@/views/timeline/timeline-playhead-mask";
 import { useTimelineStore } from "@/views/timeline/timeline-store";
-import { createFollowMemory, followScrollTop, followStep, resetFollowMemory } from "@/views/timeline/vertical-follow";
-import { pinCutWordLabels } from "@/views/timeline/word-label-pin";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -24,6 +15,7 @@ interface TimelinePlayheadProps {
   containerHeight: number;
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   capHost?: HTMLElement | null;
+  rulerTrackRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 // -- Constants -----------------------------------------------------------------
@@ -53,7 +45,12 @@ const PlayheadCap: React.FC<{ ref: React.Ref<HTMLDivElement>; onMouseDown: React
   </div>
 );
 
-const TimelinePlayhead: React.FC<TimelinePlayheadProps> = ({ containerHeight, scrollContainerRef, capHost }) => {
+const TimelinePlayhead: React.FC<TimelinePlayheadProps> = ({
+  containerHeight,
+  scrollContainerRef,
+  capHost,
+  rulerTrackRef,
+}) => {
   const duration = useAudioStore((s) => s.duration);
   const seekTo = useAudioStore((s) => s.seekTo);
   const setIsPlaying = useAudioStore((s) => s.setIsPlaying);
@@ -64,104 +61,24 @@ const TimelinePlayhead: React.FC<TimelinePlayheadProps> = ({ containerHeight, sc
   const containerRef = useRef<HTMLDivElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
   const capRef = useRef<HTMLDivElement>(null);
-  const [followMemory] = useState(createFollowMemory);
-  const [followInput] = useState(createFollowInput);
-  const [rowLayoutFor] = useState(createRowLayoutCache);
-  const [lights] = useState(createTimelineLights);
-  const [pinnedLabels] = useState(() => new Set<HTMLElement>());
-  const verticalTargetRef = useRef<number | null>(null);
-  const lastMaskRef = useRef<string>("");
-  const playheadCenterXLocalRef = useRef<number>(0);
-  const containerLeftRef = useRef<number>(0);
+  const [frame] = useState(createPlayheadFrame);
 
-  useFrameLoop(() => {
-    if (!playheadRef.current) return;
+  const elements = useMemo(
+    () => ({
+      playhead: playheadRef,
+      cap: capRef,
+      overlay: containerRef,
+      scrollContainer: scrollContainerRef,
+      rulerTrack: rulerTrackRef,
+    }),
+    [scrollContainerRef, rulerTrackRef],
+  );
+  const phases = useMemo(
+    () => ({ read: () => readPlayheadFrame(frame, elements), write: () => writePlayheadFrame(frame, elements) }),
+    [frame, elements],
+  );
 
-    // Read directly from audio element for smooth updates
-    const isPlaying = useAudioStore.getState().isPlaying;
-    const currentTime = livePlaybackTime();
-    const { zoom, scrollLeft, isDraggingPlayhead, dragTime, loopRegionDrag } = useTimelineStore.getState();
-    const { followPlayhead } = useSettingsStore.getState();
-
-    // Auto-scroll to keep playhead centered when follow is enabled
-    const container = scrollContainerRef.current;
-    // Follow would scroll the lanes under a region drag and stretch the region.
-    if (followPlayhead && isPlaying && container && !isDraggingPlayhead && !loopRegionDrag) {
-      const viewportWidth = container.clientWidth;
-      const centerOffset = viewportWidth / 2 - GUTTER_WIDTH;
-      const targetScrollLeft = Math.max(0, currentTime * zoom - centerOffset);
-      const focusRange = currentFocusScrollRange(container);
-      container.scrollLeft = focusRange ? clampScrollLeft(targetScrollLeft, focusRange) : targetScrollLeft;
-
-      fillFollowInput(followInput, rowLayoutFor, currentTime, container.clientHeight);
-      const rows = followStep(followMemory, followInput);
-      if (rows) verticalTargetRef.current = followScrollTop(rows, followInput, container.scrollHeight);
-
-      // Lerp vertical scroll only while animating toward target
-      if (verticalTargetRef.current !== null) {
-        const diff = verticalTargetRef.current - container.scrollTop;
-        if (Math.abs(diff) > 0.5) {
-          container.scrollTop += diff * 0.15;
-        } else {
-          container.scrollTop = verticalTargetRef.current;
-          verticalTargetRef.current = null;
-        }
-      }
-    } else {
-      resetFollowMemory(followMemory);
-      verticalTargetRef.current = null;
-    }
-
-    container?.parentElement?.classList.toggle("scrollbar-hidden", isPlaying && followPlayhead);
-
-    const displayTime = isDraggingPlayhead ? dragTime : currentTime;
-    const actualScrollLeft = container?.scrollLeft ?? scrollLeft;
-    const position = timeToX(displayTime, zoom, actualScrollLeft) - 1; // -1 to center the 2px wide playhead
-    playheadRef.current.style.transform = `translate3d(${position}px, 0, 0)`;
-    if (capRef.current) capRef.current.style.transform = `translate3d(${position + 1 - GUTTER_WIDTH}px, 0, 0)`;
-
-    // Update height to match full scrollable content
-    if (container) {
-      playheadRef.current.style.height = `${container.scrollHeight}px`;
-      paintTimelineLights(lights, container, useProjectStore.getState().lines, displayTime);
-      pinCutWordLabels(container, container.scrollLeft, pinnedLabels);
-    }
-
-    const containerRect = containerRef.current?.getBoundingClientRect();
-    if (containerRect) {
-      const playheadCenterXLocal = timeToX(displayTime, zoom, actualScrollLeft);
-      const playheadCenterXViewport = playheadCenterXLocal + containerRect.left;
-      playheadCenterXLocalRef.current = playheadCenterXLocal;
-      containerLeftRef.current = containerRect.left;
-      const mask = container
-        ? buildPlayheadMask(playheadMaskRoot(container), playheadCenterXViewport, containerRect.top)
-        : "";
-      if (mask !== lastMaskRef.current) {
-        lastMaskRef.current = mask;
-        const style = playheadRef.current.style;
-        style.maskImage = mask;
-        style.webkitMaskImage = mask;
-      }
-    }
-
-    // Update progress fill on collapsed banner DOM nodes (registered via mount)
-    const banners = getBannerNodes();
-    for (const banner of banners) {
-      const startStr = banner.dataset.instanceStart;
-      const endStr = banner.dataset.instanceEnd;
-      if (!startStr || !endStr) continue;
-      const startNum = Number.parseFloat(startStr);
-      const endNum = Number.parseFloat(endStr);
-      const span = endNum - startNum;
-      if (!Number.isFinite(span) || span <= 0) {
-        banner.style.setProperty("--progress-fill", "0%");
-        continue;
-      }
-      const ratio = (currentTime - startNum) / span;
-      const clamped = Math.max(0, Math.min(1, ratio));
-      banner.style.setProperty("--progress-fill", `${(clamped * 100).toFixed(2)}%`);
-    }
-  }, "timeline-playhead");
+  useFrameLoop(phases, "timeline-playhead");
 
   useEffect(() => {
     let yielded = false;
@@ -170,7 +87,7 @@ const TimelinePlayhead: React.FC<TimelinePlayheadProps> = ({ containerHeight, sc
       const playhead = playheadRef.current;
       if (!playhead) return;
 
-      const playheadCenterXViewport = containerLeftRef.current + playheadCenterXLocalRef.current;
+      const playheadCenterXViewport = frame.containerLeft + frame.playheadCenterXLocal;
       const nearPlayhead =
         e.clientX >= playheadCenterXViewport - HIT_BUFFER_PX && e.clientX <= playheadCenterXViewport + HIT_BUFFER_PX;
 
@@ -196,7 +113,7 @@ const TimelinePlayhead: React.FC<TimelinePlayheadProps> = ({ containerHeight, sc
 
     document.addEventListener("mousemove", onMove);
     return () => document.removeEventListener("mousemove", onMove);
-  }, []);
+  }, [frame]);
 
   const drag = useMemo(
     () =>
@@ -205,7 +122,6 @@ const TimelinePlayhead: React.FC<TimelinePlayheadProps> = ({ containerHeight, sc
         getScrollContainer: () => scrollContainerRef.current,
         getDuration: () => duration,
         getZoom: () => useTimelineStore.getState().zoom,
-        getStoreScrollLeft: () => useTimelineStore.getState().scrollLeft,
         getCurrentTime: livePlaybackTime,
         setIsPlaying,
         setDraggingPlayhead,
@@ -226,6 +142,7 @@ const TimelinePlayhead: React.FC<TimelinePlayheadProps> = ({ containerHeight, sc
       className="absolute inset-0 pointer-events-none overflow-hidden z-50"
       style={{ clipPath: `inset(0 0 0 ${GUTTER_WIDTH}px)` }}
     >
+      <CueFlash scrollContainerRef={scrollContainerRef} />
       <div
         ref={playheadRef}
         role="separator"

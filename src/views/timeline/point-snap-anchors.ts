@@ -3,6 +3,9 @@ import { type GridPoint, gridPoints } from "@/domain/tempo/grid-points";
 import { useAudioStore } from "@/stores/audio";
 import { useProjectStore } from "@/stores/project";
 import { useSettingsStore } from "@/stores/settings";
+import { type SnapSource, snapDistancePx } from "@/stores/settings-snap";
+import { type SnapAnchor, activeSnapAnchors, beatAnchors, snapSourceOf, vocalOnsetAnchors } from "@/views/timeline/snap";
+import type { PointSnapAnchor } from "@/views/timeline/snap-marker-math";
 import { useTimelineStore } from "@/views/timeline/timeline-store";
 
 // -- Interfaces ----------------------------------------------------------------
@@ -35,16 +38,38 @@ function snappableBeatPoints(): GridPoint[] {
   return timelineSnap && beatSnap ? visibleBeatPoints() : [];
 }
 
-function pointSnapTimes({ includeMarkers, includeOnsets, includeBeats }: PointSnapSources): number[] {
-  const { timelineSnap, snapMarkers, vocalOnsetSnap } = useSettingsStore.getState();
-  if (!timelineSnap) return [];
-  const times: number[] = [];
-  if (includeMarkers && snapMarkers) times.push(...snapPointTimes(useProjectStore.getState().customSnapPoints));
-  if (includeOnsets && vocalOnsetSnap) times.push(...useTimelineStore.getState().vocalOnsetSnapPoints);
-  if (includeBeats) for (const point of snappableBeatPoints()) times.push(point.t);
-  return times.toSorted((a, b) => a - b);
+function pointSnapAnchors({ includeMarkers, includeOnsets, includeBeats }: PointSnapSources): PointSnapAnchor[] {
+  const settings = useSettingsStore.getState();
+  if (!settings.timelineSnap) return [];
+  const anchors: PointSnapAnchor[] = [];
+  const add = (times: Iterable<number>, source: SnapSource) => {
+    const thresholdPx = snapDistancePx(settings, source);
+    for (const t of times) anchors.push({ t, thresholdPx });
+  };
+  if (includeMarkers && settings.snapMarkers)
+    add(snapPointTimes(useProjectStore.getState().customSnapPoints), "markers");
+  if (includeOnsets && settings.vocalOnsetSnap) add(useTimelineStore.getState().vocalOnsetSnapPoints, "onsets");
+  if (includeBeats)
+    add(
+      snappableBeatPoints().map((point) => point.t),
+      "beats",
+    );
+  return anchors.toSorted((a, b) => a.t - b.t);
+}
+
+function liveSnapAnchors(base: SnapAnchor[]): SnapAnchor[] {
+  const settings = useSettingsStore.getState();
+  let anchors = base;
+  if (settings.timelineSnap && settings.vocalOnsetSnap)
+    anchors = anchors.concat(vocalOnsetAnchors(useTimelineStore.getState().vocalOnsetSnapPoints));
+  anchors = anchors.concat(beatAnchors(snappableBeatPoints()));
+  return activeSnapAnchors(anchors, settings);
+}
+
+function snapThresholdPx(anchor: SnapAnchor): number {
+  return snapDistancePx(useSettingsStore.getState(), snapSourceOf(anchor.kind));
 }
 
 // -- Exports -------------------------------------------------------------------
 
-export { pointSnapTimes, snappableBeatPoints, visibleBeatPoints };
+export { liveSnapAnchors, pointSnapAnchors, snappableBeatPoints, snapThresholdPx, visibleBeatPoints };

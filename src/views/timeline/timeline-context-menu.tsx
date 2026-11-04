@@ -1,3 +1,4 @@
+import { agentDisplayName } from "@/domain/agent/display-name";
 import { getAgentColor } from "@/domain/agent/colors";
 import type { LyricLine } from "@/domain/line/model";
 import { selectionBounds } from "@/domain/selection/bounds";
@@ -206,12 +207,14 @@ function WordMenuSection({ targets, clearContextMenu, target }: SectionProps & {
       <MenuItem label="Split word" shortcut={getEffectiveKeysArray("timeline.splitWord")} onSelect={handleSplitWord} />
       {mergeInfo && (
         <MenuItem
-          label="Merge words"
-          shortcut={getEffectiveKeysArray("timeline.mergeWords")}
+          label={mergeInfo.kind === "syllables" ? "Merge syllables" : "Merge words"}
+          shortcut={getEffectiveKeysArray(
+            mergeInfo.kind === "syllables" ? "timeline.mergeSyllablesIntoWord" : "timeline.mergeWords",
+          )}
           onSelect={handleMergeWords}
         />
       )}
-      {groupedWordInfo && (
+      {!mergeInfo && groupedWordInfo && (
         <MenuItem
           label="Merge syllables"
           shortcut={getEffectiveKeysArray("timeline.mergeSyllablesIntoWord")}
@@ -279,7 +282,7 @@ function TrackMenuSection({ targets, clearContextMenu, target }: SectionProps & 
         clearContextMenu={clearContextMenu}
       />
       <MenuItem label="Add word here" shortcut={["Double Click"]} onSelect={handleAddWordHere} />
-      <PasteHereMenuItem time={target.time} lineIndex={target.lineIndex} />
+      <PasteHereMenuItem time={target.time} lineIndex={target.lineIndex} lane={target.type} />
       {targets.placeLineHereInfo && <MenuItem label="Place line here" onSelect={handlePlaceLineHere} />}
       {targets.placeAtPlayheadInfo && <MenuItem label="Place at playhead" onSelect={handlePlaceAtPlayhead} />}
       <SelectionGrouping targets={targets} clearContextMenu={clearContextMenu} />
@@ -299,8 +302,8 @@ function AgentAssignment({ targets, clearContextMenu, lineIndex }: SectionProps 
       {agents.map((agent) => (
         <MenuRadioItem
           key={agent.id}
-          lead={<SingerTag color={getAgentColor(agent.id)}>{agent.name || agent.id}</SingerTag>}
-          label={agent.name || agent.id}
+          lead={<SingerTag color={getAgentColor(agent.id)}>{agentDisplayName(agent)}</SingerTag>}
+          label={agentDisplayName(agent)}
           hideLabel
           checked={activeAgentId === agent.id}
           onSelect={() => handleAssignAgent(agent.id)}

@@ -1,20 +1,22 @@
+import { toast } from "sonner";
 import { withNewInstance } from "@/domain/group/own-timing";
 import { timeRangeResolver } from "@/domain/group/shared-timing";
 import type { LineTemplate } from "@/domain/group/template";
-import { pickedTemplateSource, templateSourceInstance } from "@/domain/group/template-source";
+import { templateSourceInstance } from "@/domain/group/template-source";
 import { instanceCount } from "@/domain/instance/enumerate";
 import type { LyricLine } from "@/domain/line/model";
+import type { WordTrack } from "@/domain/line/tracks";
 import { useAudioStore } from "@/stores/audio";
 import { useConfirmStore } from "@/stores/confirm-store";
 import { useProjectStore } from "@/stores/project";
 import { pluralize } from "@/utils/pluralize";
-import { applyPasteToLines, pasteOverlaps } from "@/views/timeline/apply-paste-to-lines";
+import { applyPasteToLines, clipboardInLane, pasteOverlaps } from "@/views/timeline/apply-paste-to-lines";
 import { decidePasteInstanceAction } from "@/views/timeline/decide-paste-instance-action";
 import { instanceToTemplate } from "@/views/timeline/group-ops";
+import { instancePasteTemplate } from "@/views/timeline/instance-paste-template";
 import type { ClipboardData } from "@/views/timeline/selection-types";
 import { findMatchingTemplate } from "@/views/timeline/structural-match";
 import { useTimelineStore } from "@/views/timeline/timeline-store";
-import { toast } from "sonner";
 
 // -- Types ---------------------------------------------------------------------
 
@@ -24,6 +26,7 @@ interface PasteTarget {
   clipboard: ClipboardData;
   cursorTime: number;
   lineIndex: number;
+  lane: WordTrack;
 }
 
 // -- Helpers -------------------------------------------------------------------
@@ -86,10 +89,8 @@ async function commitPasteAt(target: PasteTarget): Promise<PasteOutcome> {
   const lines = useProjectStore.getState().lines;
 
   if (clipboard.sourceInstance) {
-    const { groupId, instanceIdx } = clipboard.sourceInstance;
-    const group = useProjectStore.getState().groups.find((candidate) => candidate.id === groupId);
-    const template = instanceToTemplate(lines, groupId, pickedTemplateSource(lines, group, instanceIdx));
-    return placeInstance(lines, target, groupId, template, "Linked instance added");
+    const template = instancePasteTemplate(lines, useProjectStore.getState().groups, clipboard.sourceInstance);
+    return placeInstance(lines, target, clipboard.sourceInstance.groupId, template, "Linked instance added");
   }
 
   if (clipboard.candidateLines && clipboard.candidateLines.length > 0) {
@@ -114,11 +115,12 @@ async function commitPasteAt(target: PasteTarget): Promise<PasteOutcome> {
 
   if (lineIndex < 0) return "no-line";
 
+  const wordsInLane = clipboardInLane(clipboard, target.lane);
   const timeDelta = cursorTime - clipboard.entries[0].word.begin;
   const rangeOf = timeRangeResolver(lines, useProjectStore.getState().groups, useAudioStore.getState().duration);
-  if (pasteOverlaps(clipboard, lineIndex, timeDelta, lines, rangeOf)) return "overlap";
+  if (pasteOverlaps(wordsInLane, lineIndex, timeDelta, lines, rangeOf)) return "overlap";
 
-  const updates = applyPasteToLines({ lines, clipboard, targetLineIndex: lineIndex, timeDelta, rangeOf });
+  const updates = applyPasteToLines({ lines, clipboard: wordsInLane, targetLineIndex: lineIndex, timeDelta, rangeOf });
   if (!updates || updates.length === 0) return "no-change";
 
   useProjectStore.getState().updateLinesWithHistory(updates);

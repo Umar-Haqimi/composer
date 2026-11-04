@@ -1,4 +1,6 @@
-import { useAudioStore } from "@/stores/audio";
+import { useFrameLoop } from "@/hooks/use-frame-loop";
+import { notePlacement } from "@/lib/replay-cue";
+import { livePlaybackTime, useAudioStore } from "@/stores/audio";
 import { useSettingsStore } from "@/stores/settings";
 import { useThemeStore } from "@/stores/theme";
 import { cn } from "@/utils/cn";
@@ -11,10 +13,12 @@ import { OverviewBand } from "@/views/timeline/overview/overview-band";
 import { placeSnapPoint } from "@/views/timeline/place-snap-point";
 import { snapPlayheadTime } from "@/views/timeline/playhead-snap";
 import { clearLoopRegion } from "@/views/timeline/selection-playback";
-import { WAVEFORM_HEIGHT, useTimelineStore } from "@/views/timeline/timeline-store";
+import { useTimelineStore } from "@/views/timeline/timeline-store";
 import { WaveformFocusShade } from "@/views/timeline/waveform-focus-shade";
+import { WaveformBackground, WaveformSkeleton } from "@/views/timeline/waveform-loading-layers";
+import { WAVEFORM_WINDOW_WIDTH, useWaveformWindow } from "@/views/timeline/waveform-window";
 import WavesurferPlayer from "@wavesurfer/react";
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type WaveSurfer from "wavesurfer.js";
 
 // -- Interfaces ----------------------------------------------------------------
@@ -25,6 +29,7 @@ interface WaveformBarsProps {
   shown: boolean;
   colors: { wave: string; progress: string };
   initialZoom: number;
+  hostRef: React.RefObject<HTMLDivElement | null>;
   onDestroy: () => void;
   onReady: (wavesurfer: WaveSurfer) => void;
 }
@@ -43,6 +48,7 @@ const WaveformBars: React.FC<WaveformBarsProps> = ({
   shown,
   colors,
   initialZoom,
+  hostRef,
   onDestroy,
   onReady,
 }) => (
@@ -51,7 +57,7 @@ const WaveformBars: React.FC<WaveformBarsProps> = ({
     className="pt-[13px] overflow-clip transition-opacity duration-150 ease-in"
     style={{ width, opacity: shown ? 1 : 0 }}
   >
-    <div className="w-max">
+    <div ref={hostRef} className="[&_div::part(scroll)]:overflow-x-hidden!" style={{ width: WAVEFORM_WINDOW_WIDTH }}>
       <WavesurferPlayer
         height={WAVEFORM_BARS_HEIGHT}
         waveColor={colors.wave}
@@ -64,6 +70,8 @@ const WaveformBars: React.FC<WaveformBarsProps> = ({
         interact={false}
         hideScrollbar={true}
         fillParent={false}
+        autoScroll={false}
+        autoCenter={false}
         minPxPerSec={initialZoom}
         onDestroy={onDestroy}
         onReady={onReady}
@@ -85,13 +93,31 @@ const TimelineWaveform: React.FC = () => {
   const showSpectrum = useSettingsStore((s) => s.showSpectrum);
 
   const [ws, setWs] = useState<WaveSurfer | null>(null);
+  const isPlaying = useAudioStore((s) => s.isPlaying);
+  const drawnProgressTime = useRef<number | null>(null);
   const [settledFor, setSettledFor] = useState<WaveSurfer | null>(null);
   const [altHeld, setAltHeld] = useState(false);
-
-  // Never move this into an effect: opacity and the sweep gate must land in the same commit.
-  const sweeping = ws === null || settledFor !== ws;
+  const waveformHostRef = useRef<HTMLDivElement>(null);
+  useWaveformWindow(ws, waveformHostRef, !showSpectrum);
 
   const totalWidth = duration > 0 ? duration * zoom : 0;
+
+  // Drawn in the frame loop so progress and playhead move on the same frame time.
+  useFrameLoop(
+    () => {
+      if (!ws) return;
+      const time = livePlaybackTime();
+      drawnProgressTime.current = time;
+      ws.getRenderer().renderProgress(time / ws.getDuration(), true);
+    },
+    "waveform-progress",
+    isPlaying && ws !== null,
+  );
+
+  useEffect(() => {
+    if (!isPlaying) drawnProgressTime.current = null;
+  }, [isPlaying]);
+
   // Rebuild on loadstart, keyed on currentSrc: wavesurfer loads currentSrc, which lags src until then.
   const subscribeToMediaSource = useCallback(
     (onSourceChange: () => void) => {
@@ -151,7 +177,9 @@ const TimelineWaveform: React.FC = () => {
         return;
       }
       clearLoopRegion();
-      seekTo(snapPlayheadTime(time, e.metaKey));
+      const target = snapPlayheadTime(time, e.metaKey);
+      seekTo(target);
+      notePlacement(target, "pointer");
     },
     [duration, totalWidth, timeFromClick, seekTo],
   );
@@ -159,10 +187,17 @@ const TimelineWaveform: React.FC = () => {
   const onDestroy = useCallback(() => {
     setWs(null);
     setSettledFor(null);
+    useTimelineStore.getState().setWaveformReady(false);
   }, []);
 
+  useEffect(() => () => useTimelineStore.getState().setWaveformReady(false), []);
+
   const onReady = useCallback((wavesurfer: WaveSurfer) => {
+    // WaveSurfer's own timer repaints progress every frame; keep it on the time the frame loop drew.
+    wavesurfer.getCurrentTime = () =>
+      (useAudioStore.getState().isPlaying ? drawnProgressTime.current : null) ?? livePlaybackTime();
     setWs(wavesurfer);
+    useTimelineStore.getState().setWaveformReady(true);
     const audio = useAudioStore.getState().audioElement;
     if (audio && audio.currentTime > 0) {
       wavesurfer.setTime(audio.currentTime);
@@ -174,22 +209,10 @@ const TimelineWaveform: React.FC = () => {
   // A bunch of heights here are -1 to account for the 1px border at the bottom of the waveform container.
   return (
     <OverviewBand>
-      <div
-        data-waveform-redraw-bg
-        className={cn(
-          "absolute top-0 left-0 bg-(--well) border-b border-(--divider) pointer-events-none transition-opacity duration-200",
-          showSpectrum && "opacity-0",
-        )}
-        style={{ width: totalWidth, height: WAVEFORM_HEIGHT }}
-      />
+      <WaveformBackground width={totalWidth} />
       <BeatGridCanvas />
-      <div
-        data-waveform-loading-dots
-        data-sweeping={sweeping ? "" : undefined}
-        aria-hidden="true"
-        className="absolute top-0 left-0 waveform-loading-dots pointer-events-none transition-opacity duration-200 ease-out"
-        style={{ width: totalWidth, height: WAVEFORM_HEIGHT - 1, opacity: ws || showSpectrum ? 0 : 1 }}
-      />
+      {/* Never derive these in an effect: opacity and the sweep gate must land in the same commit. */}
+      <WaveformSkeleton width={totalWidth} waveformSettled={settledFor === ws} />
       {audioElement && (
         <WaveformBars
           key={waveformKey}
@@ -198,6 +221,7 @@ const TimelineWaveform: React.FC = () => {
           shown={ws !== null && !showSpectrum}
           colors={initialColors}
           initialZoom={initialZoom}
+          hostRef={waveformHostRef}
           onDestroy={onDestroy}
           onReady={onReady}
         />

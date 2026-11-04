@@ -1,10 +1,14 @@
+import { notePlacement } from "@/lib/replay-cue";
 import { useAudioStore } from "@/stores/audio";
+import { CueMarker } from "@/views/timeline/cue-marker";
 import { cn } from "@/utils/cn";
 import { formatTime } from "@/utils/format-time";
 import { placeSnapPoint } from "@/views/timeline/place-snap-point";
+import { followRulerScroll } from "@/views/timeline/ruler-scroll";
 import { useTimelineStore } from "@/views/timeline/timeline-store";
 import { IconClock } from "@tabler/icons-react";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
+import { readViewScroll } from "@/views/timeline/view-scroll";
 
 // -- Constants -----------------------------------------------------------------
 
@@ -46,38 +50,35 @@ function tickBackground(labelled: number, minor: number, zoom: number): React.CS
 // Lives outside the scroll container so the rows keep their geometry; follows its horizontal scroll by transform.
 interface TimelineRulerProps {
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
+  trackRef: React.RefObject<HTMLDivElement | null>;
   laneRef: React.Ref<HTMLDivElement>;
   markerHostRef: React.Ref<HTMLDivElement>;
 }
 
-const TimelineRuler: React.FC<TimelineRulerProps> = ({ scrollContainerRef, laneRef, markerHostRef }) => {
+const TimelineRuler: React.FC<TimelineRulerProps> = ({ scrollContainerRef, trackRef, laneRef, markerHostRef }) => {
   const duration = useAudioStore((s) => s.duration);
   const seekTo = useAudioStore((s) => s.seekTo);
   const zoom = useTimelineStore((s) => s.zoom);
   const markerMode = useTimelineStore((s) => s.markerMode);
-  const trackRef = useRef<HTMLDivElement>(null);
   const [labelled, minor] = rulerStep(zoom);
   const labels = Array.from({ length: Math.floor(duration / labelled) + 1 }, (_, index) => index * labelled);
 
   // A passive effect: the scroll container mounts after this sibling, so its ref is set only once layout effects ran.
   useEffect(() => {
     const container = scrollContainerRef.current;
-    if (!container) return;
-    const follow = () => {
-      if (trackRef.current) trackRef.current.style.translate = `${-container.scrollLeft}px 0`;
-    };
-    follow();
-    container.addEventListener("scroll", follow, { passive: true });
-    return () => container.removeEventListener("scroll", follow);
-  }, [scrollContainerRef]);
+    if (container && trackRef.current) followRulerScroll(trackRef.current, readViewScroll(container).left);
+  }, [scrollContainerRef, trackRef]);
 
   const seekToPointer = (event: React.PointerEvent<HTMLDivElement>) => {
     const container = scrollContainerRef.current;
     if (!container || duration <= 0 || event.button !== 0) return;
-    const x = event.clientX - event.currentTarget.getBoundingClientRect().left + container.scrollLeft;
+    const x = event.clientX - event.currentTarget.getBoundingClientRect().left + readViewScroll(container).left;
     const time = Math.min(duration, Math.max(0, x / zoom));
     if (useTimelineStore.getState().markerMode || event.altKey) placeSnapPoint(time);
-    else seekTo(time);
+    else {
+      seekTo(time);
+      notePlacement(time, "pointer");
+    }
   };
 
   return (
@@ -110,6 +111,7 @@ const TimelineRuler: React.FC<TimelineRulerProps> = ({ scrollContainerRef, laneR
             </span>
           ))}
           <div ref={markerHostRef} className="absolute inset-0 pointer-events-none" />
+          <CueMarker />
         </div>
       </div>
       {markerMode && (

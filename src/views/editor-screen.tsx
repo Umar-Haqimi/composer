@@ -1,7 +1,8 @@
 import { AudioPlayer } from "@/audio/audio-player";
 import type { ProjectTab } from "@/domain/project/tab";
+import { useHistoryShortcuts } from "@/hooks/useHistoryShortcuts";
 import { useMissingAudioNotice } from "@/hooks/useMissingAudioNotice";
-import { useAudioStore } from "@/stores/audio";
+import { useTransportDeckShown } from "@/hooks/use-transport-deck-shown";
 import { useProjectStore } from "@/stores/project";
 import { EditPanel } from "@/views/edit";
 import { ExportPanel } from "@/views/export";
@@ -11,11 +12,9 @@ import { PreviewPanel } from "@/views/preview";
 import { SyncPanel } from "@/views/sync/sync-panel";
 import { TimelinePanel } from "@/views/timeline/timeline-panel";
 import { cn } from "@/utils/cn";
-import { Activity } from "react";
+import { Activity, useState } from "react";
 
 // -- Constants ----------------------------------------------------------------
-
-const TABS_WITH_PLAYER: readonly ProjectTab[] = ["import", "edit", "languages", "sync", "timeline", "preview"];
 
 const PANELS: readonly { tab: ProjectTab; Panel: React.FC }[] = [
   { tab: "import", Panel: ImportPanel },
@@ -27,20 +26,25 @@ const PANELS: readonly { tab: ProjectTab; Panel: React.FC }[] = [
   { tab: "export", Panel: ExportPanel },
 ];
 
+const TABS_WITH_OWN_HISTORY_KEYS: ReadonlySet<ProjectTab> = new Set(["edit", "sync", "timeline"]);
+
 // -- Component ----------------------------------------------------------------
 
 const EditorScreen: React.FC = () => {
   useMissingAudioNotice();
   const activeTab = useProjectStore((state) => state.activeTab);
-  const source = useAudioStore((state) => state.source);
-  const showPlayer = Boolean(source) && TABS_WITH_PLAYER.includes(activeTab);
+  const showPlayer = useTransportDeckShown();
+  useHistoryShortcuts(!TABS_WITH_OWN_HISTORY_KEYS.has(activeTab));
+  // A panel mounts on its tab's first visit, then Activity keeps its state across switches.
+  const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<ProjectTab>>(() => new Set([activeTab]));
+  if (!visitedTabs.has(activeTab)) setVisitedTabs(new Set([...visitedTabs, activeTab]));
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <main className={cn("flex-1 min-h-0 workspace-card", !showPlayer && "mb-2")}>
-        {PANELS.map(({ tab, Panel }) => (
+        {PANELS.filter(({ tab }) => visitedTabs.has(tab)).map(({ tab, Panel }) => (
           <Activity key={tab} mode={activeTab === tab ? "visible" : "hidden"}>
-            <div className="absolute inset-0 flex flex-col">
+            <div data-tab-panel={tab} className="absolute inset-0 flex flex-col">
               <Panel />
             </div>
           </Activity>

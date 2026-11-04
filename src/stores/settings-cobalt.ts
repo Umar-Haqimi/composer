@@ -29,8 +29,7 @@ function cobaltActions(set: SetCobalt): CobaltActions {
       })),
     removeCobaltInstance: (id) =>
       set((state) => {
-        const nextStatus = { ...state.cobaltInstanceStatus };
-        delete nextStatus[id];
+        const { [id]: _removedStatus, ...nextStatus } = state.cobaltInstanceStatus;
         return {
           cobaltInstances: state.cobaltInstances.filter((i) => i.id !== id),
           selectedCobaltInstanceId:

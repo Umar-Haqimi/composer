@@ -1,7 +1,7 @@
-import { VOCAL_MODEL_APPROX_BYTES } from "@/audio/separation/model-registry";
 import { SPECTRUM_CONTRAST } from "@/domain/spectrum/settings";
 import { useSettingsStore } from "@/stores/settings";
 import type { SettingId } from "@/stores/settings-catalog";
+import { SNAP_DISTANCE_RANGE_PX } from "@/stores/settings-snap";
 import { BEAT_GRID_LINE_OPTIONS } from "@/ui/beat-grid-line-options";
 import { LAUNCH_SCREEN_OPTIONS, LIBRARY_SORT_OPTIONS } from "@/ui/projects/library-options";
 import { AlignmentModelSetting } from "@/ui/settings/alignment-model-setting";
@@ -10,9 +10,16 @@ import { CobaltInstancesSetting } from "@/ui/settings/cobalt-instances-setting";
 import { DefaultPlaybackRateSetting } from "@/ui/settings/default-playback-rate-setting";
 import { LibraryViewSetting } from "@/ui/settings/library-view-setting";
 import { LlmProfilesSetting } from "@/ui/settings/llm-profiles-setting";
+import { LoupeSizeSetting } from "@/ui/settings/loupe-size/loupe-size-setting";
+import {
+  AlignmentModelFilesSetting,
+  BeatModelFilesSetting,
+  VocalModelFilesSetting,
+} from "@/ui/settings/models/model-file-list";
 import { ResetAllSettingsSetting, ResetTourSetting } from "@/ui/settings/reset-settings";
 import type { SelectOption } from "@/ui/select";
 import type { SliderAction } from "@/ui/settings/setting-controls";
+import { ShortcutPresetGallery } from "@/ui/settings/shortcuts/shortcut-preset-gallery";
 import { SplitCharacterSetting } from "@/ui/settings/split-character-setting";
 import { BackUpAllProjectsSetting, DeleteAllProjectsSetting } from "@/ui/settings/storage/backup-settings-setting";
 import { ProjectAudioListSetting } from "@/ui/settings/storage/project-audio-list-setting";
@@ -20,6 +27,7 @@ import { KEEP_YOUTUBE_AUDIO_OPTIONS, STORAGE_LIMIT_OPTIONS } from "@/ui/settings
 import { StorageProtectionSetting } from "@/ui/settings/storage/storage-protection-setting";
 import { StorageUsageSetting } from "@/ui/settings/storage/storage-usage-setting";
 import { ThemeSettings } from "@/ui/settings/theme/theme-settings";
+import { VocalModelSetting } from "@/ui/settings/vocal-model-setting";
 import {
   ANALYSIS_WINDOW_OPTIONS,
   FREQUENCY_SCALE_OPTIONS,
@@ -29,8 +37,7 @@ import {
   SPECTRUM_SOURCE_OPTIONS,
   SPECTRUM_TOP_OPTIONS,
 } from "@/ui/spectrum-options";
-import { formatWholeMegabytes } from "@/utils/format-file-size";
-import { useTimelineStore } from "@/views/timeline/timeline-store";
+import { MAX_ZOOM, MIN_ZOOM, ZOOM_STEP, useTimelineStore } from "@/views/timeline/timeline-store";
 
 // -- Types ---------------------------------------------------------------------
 
@@ -50,6 +57,7 @@ type SettingControl =
 // -- Formats -------------------------------------------------------------------
 
 const TOGGLE: SettingControl = { kind: "toggle" };
+const SNAP_DISTANCE: SettingControl = { kind: "slider", ...SNAP_DISTANCE_RANGE_PX, step: 1, format: (v) => `${v}px` };
 const asMilliseconds = (seconds: number) => `${(seconds * 1000).toFixed(0)}ms`;
 
 // -- Registry ------------------------------------------------------------------
@@ -71,6 +79,14 @@ const SETTING_CONTROLS: Record<SettingId, SettingControl> = {
   resetTour: { kind: "custom", Component: ResetTourSetting },
   resetAllSettings: { kind: "custom", Component: ResetAllSettingsSetting },
   libraryView: { kind: "custom", Component: LibraryViewSetting },
+  linkedDivergenceAction: {
+    kind: "select",
+    options: [
+      { value: "ask", label: "Ask every time" },
+      { value: "apply", label: "Apply to all" },
+      { value: "detach", label: "Detach" },
+    ],
+  },
   librarySort: { kind: "select", options: LIBRARY_SORT_OPTIONS },
   launchScreen: { kind: "select", options: LAUNCH_SCREEN_OPTIONS },
   theme: { kind: "custom", Component: ThemeSettings },
@@ -79,31 +95,19 @@ const SETTING_CONTROLS: Record<SettingId, SettingControl> = {
   rememberPlaybackRate: TOGGLE,
   rememberVolume: TOGGLE,
   audioScrubPreview: TOGGLE,
+  showLevelMeters: TOGGLE,
+  vocalModelFiles: { kind: "custom", Component: VocalModelFilesSetting },
   autoSeparateOnImport: TOGGLE,
-  vocalModelVariant: {
-    kind: "select",
-    options: [
-      {
-        value: "fp32",
-        label: "fp32",
-        badge: "Recommended",
-        detail: `${formatWholeMegabytes(VOCAL_MODEL_APPROX_BYTES.fp32)} · Runs on every GPU`,
-      },
-      {
-        value: "fp16",
-        label: "fp16",
-        badge: "Experimental",
-        detail: `${formatWholeMegabytes(VOCAL_MODEL_APPROX_BYTES.fp16)} · Needs WebGPU shader-f16`,
-      },
-    ],
-  },
+  vocalModelVariant: { kind: "custom", Component: VocalModelSetting },
+  alignmentModelFiles: { kind: "custom", Component: AlignmentModelFilesSetting },
   alignmentModelId: { kind: "custom", Component: AlignmentModelSetting },
   keepAlignmentModelLoaded: TOGGLE,
+  beatModelFiles: { kind: "custom", Component: BeatModelFilesSetting },
   defaultZoom: {
     kind: "slider",
-    min: 20,
-    max: 500,
-    step: 20,
+    min: MIN_ZOOM,
+    max: MAX_ZOOM,
+    step: ZOOM_STEP,
     format: (v) => `${v} px/s`,
     action: {
       label: "Use current",
@@ -126,14 +130,20 @@ const SETTING_CONTROLS: Record<SettingId, SettingControl> = {
   snapWordsAndLines: TOGGLE,
   snapMarkers: TOGGLE,
   beatSnap: TOGGLE,
+  snapToPlayhead: TOGGLE,
   beatGridVisible: TOGGLE,
   beatGridLines: { kind: "select", options: [...BEAT_GRID_LINE_OPTIONS] },
   shareTimingInNewGroups: TOGGLE,
   loopOpenGroup: TOGGLE,
   selectionLeadIn: { kind: "slider", min: 0, max: 1, step: 0.05, format: (v) => (v === 0 ? "Off" : asMilliseconds(v)) },
-  timelineSnapThreshold: { kind: "slider", min: 4, max: 24, step: 1, format: (v) => `${v}px` },
+  snapDistanceWords: SNAP_DISTANCE,
+  snapDistanceMarkers: SNAP_DISTANCE,
+  snapDistanceOnsets: SNAP_DISTANCE,
+  snapDistanceBeats: SNAP_DISTANCE,
+  snapDistancePlayhead: SNAP_DISTANCE,
   snapPlayheadToPoints: TOGGLE,
   followPlayhead: TOGGLE,
+  returnToCue: TOGGLE,
   rollingEdit: TOGGLE,
   syllablesFollowRolling: TOGGLE,
   previewSidebar: TOGGLE,
@@ -152,6 +162,7 @@ const SETTING_CONTROLS: Record<SettingId, SettingControl> = {
   spectrumScale: { kind: "select", options: [...FREQUENCY_SCALE_OPTIONS] },
   spectrumTop: { kind: "select", options: [...SPECTRUM_TOP_OPTIONS] },
   spectrumWindow: { kind: "select", options: [...ANALYSIS_WINDOW_OPTIONS] },
+  loupeSize: { kind: "custom", Component: LoupeSizeSetting },
   spectrumPhase: { kind: "select", options: [...PHASE_COLOUR_OPTIONS] },
   splitCharacter: { kind: "custom", Component: SplitCharacterSetting },
   nudgeAmount: { kind: "slider", min: 0.01, max: 0.2, step: 0.01, format: asMilliseconds },
@@ -176,6 +187,7 @@ const SETTING_CONTROLS: Record<SettingId, SettingControl> = {
   confirmSyncReset: TOGGLE,
   confirmClearProject: TOGGLE,
   confirmResetSettings: TOGGLE,
+  shortcutPreset: { kind: "custom", Component: ShortcutPresetGallery },
   confirmResetShortcuts: TOGGLE,
   confirmApplyToAllSyllableSplit: TOGGLE,
   confirmConformToGroup: TOGGLE,

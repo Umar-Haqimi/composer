@@ -3,6 +3,7 @@ import { useProjectStore } from "@/stores/project";
 import { installUtilitiesUsedIn } from "@/test/browser-css";
 import { render } from "@/test/render";
 import { EditPanel } from "@/views/edit";
+import { getSplitCharacter } from "@/utils/split-character";
 import { findRepeatingStandaloneSections } from "@/views/grouping/repeating-sections";
 import { describe, expect, it } from "vitest";
 import { userEvent } from "vitest/browser";
@@ -16,9 +17,11 @@ function songWithTwoChoruses() {
     line("v1", "Walking down the empty street"),
     line("c1a", "Hold me close tonight"),
     line("c1b", "Never let me go"),
+    line("c1c", "Stay until the dawn"),
     line("v2", "Morning comes and I am gone"),
     line("c2a", "Hold me close tonight"),
     line("c2b", "Never let me go"),
+    line("c2c", "Stay until the dawn"),
   ];
 }
 
@@ -35,7 +38,7 @@ describe("EditPanel · grouping suggestions", () => {
 
     await expect.poll(() => store().groups).toHaveLength(1);
     const grouped = store().lines.filter((candidate) => candidate.groupId !== undefined);
-    expect(grouped.map((candidate) => candidate.id)).toEqual(["c1a", "c1b", "c2a", "c2b"]);
+    expect(grouped.map((candidate) => candidate.id)).toEqual(["c1a", "c1b", "c1c", "c2a", "c2b", "c2c"]);
     await expect.element(screen.getByRole("button", { name: "Group them" })).not.toBeInTheDocument();
   });
 
@@ -73,13 +76,13 @@ describe("EditPanel · grouping suggestions", () => {
 
       await expect.poll(() => store().groups).toHaveLength(1);
       const grouped = store().lines.filter((candidate) => candidate.groupId !== undefined);
-      expect(grouped.map((candidate) => candidate.id)).toEqual(["c1a", "c1b", "c2a", "c2b"]);
+      expect(grouped.map((candidate) => candidate.id)).toEqual(["c1a", "c1b", "c1c", "c2a", "c2b", "c2c"]);
       await expect.element(ghostGroup.first()).not.toBeInTheDocument();
     });
 
     it("dismisses a ghost group from its header", async () => {
       useProjectStore.setState({ activeTab: "edit", lines: songWithTwoChoruses(), groups: [] });
-      const [suggestion] = findRepeatingStandaloneSections(store().lines);
+      const [suggestion] = findRepeatingStandaloneSections(store().lines, getSplitCharacter());
       const screen = await render(<EditPanel />);
 
       await screen.getByRole("button", { name: "Dismiss suggested group" }).first().click();
@@ -94,7 +97,7 @@ describe("EditPanel · grouping suggestions", () => {
 
   it("renames a group from its preview header in one undo step", async () => {
     useProjectStore.setState({ activeTab: "edit", lines: songWithTwoChoruses(), groups: [] });
-    store().groupRepeatingSections([1, 4], 2, { label: "Group 1" });
+    store().groupRepeatingSections([1, 5], 3, { label: "Group 1" });
     store().clearHistory();
     const screen = await render(<EditPanel />);
 
@@ -130,7 +133,7 @@ describe("EditPanel · grouping suggestions", () => {
       if (!textarea) throw new Error("textarea not rendered");
       const topWithSuggestion = textarea.getBoundingClientRect().top;
 
-      store().dismissSuggestion(findRepeatingStandaloneSections(store().lines)[0].fingerprint);
+      store().dismissSuggestion(findRepeatingStandaloneSections(store().lines, getSplitCharacter())[0].fingerprint);
 
       await expect.element(screen.getByRole("button", { name: "Group them" })).not.toBeInTheDocument();
       expect(textarea.getBoundingClientRect().top).toBe(topWithSuggestion);
@@ -140,7 +143,7 @@ describe("EditPanel · grouping suggestions", () => {
 
   describe("edge cases", () => {
     it("offers nothing when no section repeats", async () => {
-      useProjectStore.setState({ activeTab: "edit", lines: songWithTwoChoruses().slice(0, 4), groups: [] });
+      useProjectStore.setState({ activeTab: "edit", lines: songWithTwoChoruses().slice(0, 5), groups: [] });
       const screen = await render(<EditPanel />);
 
       await expect.element(screen.getByText("Lyrics Editor")).toBeVisible();

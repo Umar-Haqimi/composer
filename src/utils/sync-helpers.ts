@@ -1,5 +1,5 @@
-import { effectiveBounds } from "@/domain/line/bounds";
 import type { LyricLine } from "@/domain/line/model";
+import { trackWords } from "@/domain/line/tracks";
 import type { AnchorUndo } from "@/domain/sync/anchor-gesture";
 import type { SyncCursor } from "@/domain/sync/cursor";
 import type { ReRecording } from "@/domain/sync/skipped-instances";
@@ -134,31 +134,24 @@ function createInitialBgWords(backgroundText: string, begin: number, end?: numbe
   return distributeWordsInLine(backgroundText, begin, resolvedEnd);
 }
 
-function createBgWordsFromTextAt(line: LyricLine, begin: number, maxEnd: number): WordTiming[] | null {
-  if (!line.backgroundText || line.backgroundWords?.length) return null;
-  const naturalEnd = begin + splitIntoWords(line.backgroundText).length * DEFAULT_BG_WORD_DURATION;
-  const words = createInitialBgWords(line.backgroundText, begin, Math.min(maxEnd, naturalEnd));
+function createTrackWordsFromTextAt(
+  line: LyricLine,
+  type: "word" | "bg",
+  begin: number,
+  maxEnd: number,
+): WordTiming[] | null {
+  const text = type === "word" ? line.text : line.backgroundText;
+  if (!text || trackWords(line, type)?.length) return null;
+  const partDuration = type === "word" ? useSettingsStore.getState().defaultWordDuration : DEFAULT_BG_WORD_DURATION;
+  const naturalEnd = begin + splitIntoWords(text).length * partDuration;
+  const words = distributeWordsInLine(text, begin, Math.min(maxEnd, naturalEnd));
   return words.length > 0 ? words : null;
-}
-
-function createBgWordsFromLine(line: LyricLine): WordTiming[] | null {
-  if (!line.backgroundText) return null;
-  const timing = effectiveBounds(line);
-  if (!timing) return null;
-  return createInitialBgWords(line.backgroundText, (timing.begin + timing.end) / 2, timing.end);
-}
-
-function withSeededBackgroundWords(line: LyricLine): LyricLine {
-  if (!line.backgroundText || line.backgroundWords?.length) return line;
-  const backgroundWords = createBgWordsFromLine(line);
-  return backgroundWords ? { ...line, backgroundWords } : line;
 }
 
 // -- Exports ------------------------------------------------------------------
 
 export {
-  createBgWordsFromLine,
-  createBgWordsFromTextAt,
+  createTrackWordsFromTextAt,
   createInitialBgWords,
   distributeWordsInLine,
   getNudgeAmount,
@@ -167,6 +160,5 @@ export {
   parseTimeMs,
   splitIntoWords,
   splitIntoWordsWithMeta,
-  withSeededBackgroundWords,
 };
 export type { SyncReRecording, SyncState };

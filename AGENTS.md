@@ -103,6 +103,8 @@ file to its allowlist without the maintainer's approval.
 - `frame-loop-ownership`, `frame-loop-wiring-complete`: animation frames go through
   `src/lib/frame-loop.ts`, never raw `requestAnimationFrame`. A new store must be wired into the
   frame loop.
+- `timeline-scroll-ownership`: the Timeline scroll position is read and written only through
+  `views/timeline/view-scroll.ts`.
 - `file-size-budget`: source files stay under 300 lines. Split the file instead of growing it.
 - `one-concept-one-regex`: a regex literal is declared in one file only.
 - `button-primitives`, `download-owner`, `pluralize-owner`, `no-raw-settings-references`: use the
@@ -123,6 +125,57 @@ before writing a new one.
 - Never set `innerHTML`.
 - No em dashes in code, copy or commit messages.
 - Commit messages are one line: `type: brief description` (for example `fix: timing offset`).
+
+## Settings
+
+A setting is a cost: one more decision for every user and one more state to test. Ship a good
+default first.
+
+- Add a setting only when people with real, different workflows need different behaviour and no
+  single default serves both. Prefer, in order: a default that fits most people; a control where the
+  feature lives (a header latch, a popover row), persisted from day one; a Settings row.
+- A control that lives on the feature does not also need a Settings row, unless the row sets the
+  default for new projects or sessions.
+- Never add a setting to avoid a design decision, or to keep a behaviour nobody asked to keep.
+- Every setting is a catalog entry in `src/stores/settings-catalog-entries-<section>.ts`. Labels,
+  descriptions, sections and groups are read from the catalog everywhere (`SettingLink`, search,
+  Changed). Never hand-write a setting label in copy. Labels describe the on state.
+- Sections, in sidebar order: App (General, Theme, Shortcuts, Confirmations), Editing (Lyrics,
+  Playback, Sync & Timing, Timeline, Snap, Spectrum), System (Save & Storage, Models, Advanced). Put
+  a setting in the section named after the feature it changes. Anything about a downloaded model
+  goes in Models.
+- Keep a section under 15 rows. Past that, split it by feature instead of adding more groups.
+- Every "Don't ask again" choice must be reversible from Confirmations.
+- Changed is derived (`changedSettingIds`), never stored. Model files are listed and removed only
+  through `src/lib/model-files.ts`.
+
+## Performance
+
+The Timeline renders hundreds of word blocks, several canvases and a playhead that moves every
+frame. Small mistakes there show up as lag on slower machines, so these rules hold for every change
+that touches it:
+
+- Subscribe to a store value only when the render output uses it. Fast values (`zoom`, playback
+  time, scroll position) are read with `getState()` inside handlers and frame callbacks.
+- Pass stable callbacks into memoized rows and blocks. An inline closure per row turns one zoom step
+  into a re-render of every row.
+- Never measure text or read layout during render.
+- Frame callbacks (`lib/frame-loop.ts`) do every layout read in the `read` phase and every write in
+  the `write` phase. Query the DOM once per frame, write a style only when its value changed, and
+  never force a reflow (`void el.offsetWidth`).
+- A new style written every frame inside the Timeline is listed in
+  `views/timeline/playback-style-mutation.ts`, or OverlayScrollbars re-measures layout every frame.
+- `patches/overlayscrollbars@2.17.0.patch` drops OverlayScrollbars' `noContent > *` rule. Chrome
+  restyles every Timeline row on each OverlayScrollbars update while that rule exists. Carry the
+  patch forward on every OverlayScrollbars upgrade.
+- WaveSurfer must never redraw the whole song. `views/timeline/waveform-window.ts` owns its width
+  and scroll; change zoom with `ws.setOptions`, never by rebuilding the instance.
+- Heavy tab panels mount on their first visit. Do not pre-render long lists or code views in a
+  hidden `<Activity>`.
+
+To show a Timeline change is not slower, profile it at 4x CPU throttling: zoom with the buttons and
+with a fast Ctrl+wheel burst in both directions, scroll, and play. Compare against a master build.
+Profiling scripts and perf tooling stay local and are never committed.
 
 ## Pull requests
 

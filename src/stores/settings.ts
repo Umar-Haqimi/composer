@@ -16,7 +16,7 @@ import {
 import { SETTINGS_PERSIST_VERSION, migrateSettings } from "@/stores/settings-migration";
 import { SNAP_DEFAULTS, type SnapSettings } from "@/stores/settings-snap";
 import { SYNC_TAP_DEFAULTS, type SyncTapSettings } from "@/stores/settings-sync-taps";
-import { DEFAULT_BRIDGE_URL } from "@/utils/composer-bridge-api";
+import { DEFAULT_BRIDGE_URL } from "@/utils/composer-bridge-url";
 import { PREVIEW_SIDEBAR_WIDTH } from "@/utils/preview-sidebar-width";
 import { DEFAULT_MIN_WORD_DURATION } from "@/utils/word-spaces";
 import { create } from "zustand";
@@ -27,7 +27,7 @@ import { persist } from "zustand/middleware";
 type GranularityDefault = "word" | "line";
 type LinkedDivergenceAction = "ask" | "apply" | "detach";
 type PreviewRenderer = "braccato" | "am-lyrics";
-type VocalModelVariant = "fp16" | "fp32";
+type VocalModelVariant = "fp16" | "fp32" | "roformer";
 type BooleanSettingKey = {
   [K in keyof SettingsState]: SettingsState[K] extends boolean ? K : never;
 }[keyof SettingsState];
@@ -57,10 +57,12 @@ interface SettingsState extends LlmProfilesState, SnapSettings, SpectrumSettings
   rememberVolume: boolean;
   lastVolume: number;
   audioScrubPreview: boolean;
+  showLevelMeters: boolean;
 
   defaultZoom: number;
   defaultRowHeight: number;
   followPlayhead: boolean;
+  returnToCue: boolean;
   rollingEdit: boolean;
   previewSidebar: boolean;
   previewSidebarWidth: number;
@@ -146,10 +148,12 @@ const DEFAULTS: SettingsState = {
   rememberVolume: true,
   lastVolume: 1,
   audioScrubPreview: true,
+  showLevelMeters: true,
 
   defaultZoom: 100,
   defaultRowHeight: 44,
   followPlayhead: true,
+  returnToCue: false,
   rollingEdit: false,
   previewSidebar: false,
   previewSidebarWidth: PREVIEW_SIDEBAR_WIDTH.default,
@@ -200,7 +204,7 @@ const DEFAULTS: SettingsState = {
   previewRenderer: "braccato",
 
   autoSeparateOnImport: false,
-  vocalModelVariant: "fp32",
+  vocalModelVariant: "fp16",
   alignmentModelId: RECOMMENDED_ALIGNMENT_MODEL,
   keepAlignmentModelLoaded: false,
 
@@ -259,8 +263,7 @@ const useSettingsStore = create<SettingsState & SettingsActions>()(
 function getActiveCobaltInstance(): CobaltInstance {
   const state = useSettingsStore.getState();
   if (state.selectedCobaltInstanceId === DEFAULT_COBALT_INSTANCE_ID) return BUILTIN_COBALT_INSTANCE;
-  const found = state.cobaltInstances.find((i) => i.id === state.selectedCobaltInstanceId);
-  return found ?? BUILTIN_COBALT_INSTANCE;
+  return state.cobaltInstances.find((i) => i.id === state.selectedCobaltInstanceId) ?? BUILTIN_COBALT_INSTANCE;
 }
 
 function isUsingDefaultCobaltInstance(): boolean {

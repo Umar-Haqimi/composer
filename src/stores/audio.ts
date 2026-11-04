@@ -1,10 +1,16 @@
+import { readPlaybackClock } from "@/audio/playback-clock";
+import { type SeekReveal, seekWithReveal } from "@/audio/seek-reveal-intent";
 import type { SavedAudioSource } from "@/domain/project/audio-source";
+import type { SourceMetadata } from "@/domain/project/source-metadata";
 import { useSettingsStore } from "@/stores/settings";
 import { create } from "zustand";
 
 // -- Types --------------------------------------------------------------------
 
-type AudioSource = { type: "file"; file: File } | { type: "youtube"; videoId: string; file?: File } | null;
+type AudioSource =
+  | { type: "file"; file: File }
+  | { type: "youtube"; videoId: string; file?: File; details?: SourceMetadata }
+  | null;
 type YouTubeLoadFailure = "bridge-unreachable" | "fetch-failed";
 
 interface AudioState {
@@ -27,8 +33,8 @@ interface AudioState {
 
 interface AudioActions {
   setSource: (source: AudioSource) => void;
-  setYouTubeSource: (videoId: string, file?: File) => void;
-  setYouTubeFile: (file: File) => void;
+  setYouTubeSource: (videoId: string, file?: File, details?: SourceMetadata) => void;
+  setYouTubeFile: (file: File, details?: SourceMetadata) => void;
   expectProjectAudio: (saved: SavedAudioSource) => void;
   failYouTubeLoad: (error: string, failure?: YouTubeLoadFailure) => void;
   setIsPlaying: (isPlaying: boolean) => void;
@@ -41,7 +47,7 @@ interface AudioActions {
   setIsLoading: (isLoading: boolean) => void;
   setYouTubeLoadError: (error: string | null) => void;
   registerAudioElement: (element: HTMLAudioElement | null) => void;
-  seekTo: (time: number) => void;
+  seekTo: (time: number, reveal?: SeekReveal) => void;
   reset: () => void;
 }
 
@@ -103,9 +109,9 @@ const useAudioStore = create<AudioState & AudioActions>((set, get) => ({
       youtubeFallbackExpectedAudio: null,
       expectedAudio: null,
     }),
-  setYouTubeSource: (videoId, file) =>
+  setYouTubeSource: (videoId, file, details) =>
     set((s) => ({
-      source: { type: "youtube", videoId, file },
+      source: { type: "youtube", videoId, file, details },
       currentTime: 0,
       duration: 0,
       isPlaying: false,
@@ -115,11 +121,11 @@ const useAudioStore = create<AudioState & AudioActions>((set, get) => ({
       youtubeFallbackExpectedAudio: file ? null : fallbackExpectedAudioBeforeYouTubeLoad(s),
       expectedAudio: null,
     })),
-  setYouTubeFile: (file) =>
+  setYouTubeFile: (file, details) =>
     set((s) => {
       if (!s.source || s.source.type !== "youtube") return {};
       return {
-        source: { ...s.source, file },
+        source: { ...s.source, file, details: details ?? s.source.details },
         youtubeFallbackSource: null,
         youtubeFallbackExpectedAudio: null,
         youtubeLoadFailure: null,
@@ -128,7 +134,7 @@ const useAudioStore = create<AudioState & AudioActions>((set, get) => ({
     }),
   expectProjectAudio: (saved) =>
     set({
-      source: saved.kind === "youtube" ? { type: "youtube", videoId: saved.videoId } : null,
+      source: saved.kind === "youtube" ? { type: "youtube", videoId: saved.videoId, details: saved.details } : null,
       currentTime: 0,
       duration: 0,
       isPlaying: false,
@@ -168,12 +174,11 @@ const useAudioStore = create<AudioState & AudioActions>((set, get) => ({
   setIsLoading: (isLoading) => set({ isLoading }),
   setYouTubeLoadError: (youtubeLoadError) => set({ youtubeLoadError }),
   registerAudioElement: (audioElement) => set({ audioElement }),
-  seekTo: (time: number) => {
+  seekTo: (time, reveal) => {
     if (!Number.isFinite(time) || time < 0) return;
     const audio = get().audioElement;
-    if (audio) {
-      audio.currentTime = time;
-    }
+    if (audio && reveal) seekWithReveal(audio, time, reveal);
+    else if (audio) audio.currentTime = time;
     set({ currentTime: time });
   },
   reset: () => set(createInitialState()),
@@ -188,7 +193,7 @@ function toggledPlaybackRate(): number {
 
 function livePlaybackTime(): number {
   const { audioElement, currentTime } = useAudioStore.getState();
-  return audioElement?.currentTime ?? currentTime;
+  return audioElement ? readPlaybackClock(audioElement) : currentTime;
 }
 
 function seekBy(seconds: number): void {
@@ -208,9 +213,15 @@ function playableFile(source: AudioSource): File | null {
   return null;
 }
 
+function isActiveAudioFile(file: File): boolean {
+  const { source } = useAudioStore.getState();
+  return source?.type === "file" && source.file === file;
+}
+
 export {
   FULL_VOLUME,
   NORMAL_PLAYBACK_RATE,
+  isActiveAudioFile,
   livePlaybackTime,
   playableFile,
   seekBy,

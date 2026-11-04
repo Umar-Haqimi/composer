@@ -4,12 +4,8 @@ import { BridgeInstallGuide } from "@/ui/settings/bridge-install-guide";
 import { BridgeUrlField } from "@/ui/settings/bridge-url-field";
 import { Switch } from "@/ui/switch";
 import { hasBridgeEverBeenDetected, markBridgeDetected } from "@/utils/bridge-detection";
-import {
-  type BridgeHealth,
-  DEFAULT_BRIDGE_URL,
-  HEALTH_QUERY_KEY,
-  checkBridgeHealth,
-} from "@/utils/composer-bridge-api";
+import { DEFAULT_BRIDGE_URL } from "@/utils/composer-bridge-url";
+import { BRIDGE_REPO_URL, type BridgeHealth, HEALTH_QUERY_KEY, checkBridgeHealth } from "@/utils/composer-bridge-api";
 import { IconCheck, IconExclamationCircle, IconLoader2 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
@@ -121,7 +117,7 @@ const BridgeSection: React.FC = () => {
             Route YouTube imports through a small local binary running on your machine instead of Cobalt. Uses your
             residential IP, so YouTube doesn't block it. Requires running{" "}
             <a
-              href="https://github.com/better-lyrics/composer-bridge"
+              href={BRIDGE_REPO_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="underline underline-offset-2 transition-colors hover:text-composer-text"

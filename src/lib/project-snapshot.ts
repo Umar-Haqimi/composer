@@ -13,7 +13,7 @@ import { useTimelineStore } from "@/views/timeline/timeline-store";
 function toSavedAudioSource(source: AudioSource): SavedAudioSource | undefined {
   if (!source) return undefined;
   if (source.type === "file") return { kind: "file", name: source.file.name };
-  if (source.type === "youtube") return { kind: "youtube", videoId: source.videoId };
+  if (source.type === "youtube") return { kind: "youtube", videoId: source.videoId, details: source.details };
   return undefined;
 }
 
@@ -58,11 +58,14 @@ function currentSaveInput(): ProjectSaveInput {
     dismissedMetadataMatches: projectState.dismissedMetadataMatches,
     currentStem: useSeparationStore.getState().currentStem,
     primingStripped: projectState.primingStripped,
+    primingCorrected: projectState.primingCorrected,
     customSnapPoints: projectState.customSnapPoints,
     beatGrid: projectState.beatGrid,
     hasUnexportedImport: projectState.hasUnexportedImport,
     importedMetadataKeys: projectState.importedMetadataKeys,
     ttmlEditState: projectState.ttmlEditState,
+    alignedTimings: projectState.alignedTimings,
+    alignmentNoticeDismissed: projectState.alignmentNoticeDismissed,
   };
 }
 

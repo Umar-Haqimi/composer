@@ -23,7 +23,7 @@ const SHORTCUT_SECTIONS: ShortcutSectionProps[] = [
   {
     title: "General",
     shortcuts: [
-      { keys: ["Shift", "?"], description: "Show keyboard shortcuts", shortcutId: "global.help" },
+      { keys: ["Shift", "?"], description: "Show help", shortcutId: "global.help" },
       { keys: ["Enter"], description: "Play / Pause audio", shortcutId: "global.playPause" },
       {
         keys: ["Mod", "Enter"],
@@ -81,12 +81,13 @@ const SHORTCUT_SECTIONS: ShortcutSectionProps[] = [
   {
     title: "Navigation",
     shortcuts: [
-      { keys: ["Mod", "1"], description: "Go to Import tab" },
-      { keys: ["Mod", "2"], description: "Go to Edit tab" },
-      { keys: ["Mod", "3"], description: "Go to Sync tab" },
-      { keys: ["Mod", "4"], description: "Go to Timeline tab" },
-      { keys: ["Mod", "5"], description: "Go to Preview tab" },
-      { keys: ["Mod", "6"], description: "Go to Export tab" },
+      { keys: ["Mod", "1"], description: "Go to Import tab", shortcutId: "global.goToImport" },
+      { keys: ["Mod", "2"], description: "Go to Edit tab", shortcutId: "global.goToEdit" },
+      { keys: ["Mod", "3"], description: "Go to Languages tab", shortcutId: "global.goToLanguages" },
+      { keys: ["Mod", "4"], description: "Go to Sync tab", shortcutId: "global.goToSync" },
+      { keys: ["Mod", "5"], description: "Go to Timeline tab", shortcutId: "global.goToTimeline" },
+      { keys: ["Mod", "6"], description: "Go to Preview tab", shortcutId: "global.goToPreview" },
+      { keys: ["Mod", "7"], description: "Go to Export tab", shortcutId: "global.goToExport" },
     ],
   },
   {
@@ -145,7 +146,7 @@ const SHORTCUT_SECTIONS: ShortcutSectionProps[] = [
       { keys: ["E"], description: "Edit selected word text", shortcutId: "timeline.editWord" },
       { keys: ["F2"], description: "Edit selected word text" },
       { keys: ["S"], description: "Split selected word into syllables", shortcutId: "timeline.splitSyllable" },
-      { keys: ["Shift", "S"], description: "Split word into words", shortcutId: "timeline.splitWord" },
+      { keys: ["Shift", "S"], description: "Split into separate words", shortcutId: "timeline.splitWord" },
       { keys: ["M"], description: "Merge adjacent selected words", shortcutId: "timeline.mergeWords" },
       { keys: ["Y"], description: "Merge syllables into one word", shortcutId: "timeline.mergeSyllablesIntoWord" },
       { keys: ["W"], description: "Split line into words", shortcutId: "timeline.splitIntoWords" },
@@ -178,9 +179,11 @@ const SHORTCUT_SECTIONS: ShortcutSectionProps[] = [
       { keys: ["Shift", "Enter"], description: "Open the selected group", shortcutId: "timeline.openGroup" },
       { keys: ["Escape"], description: "Close the open group", shortcutId: "timeline.closeGroup" },
       { keys: ["Alt", "Enter"], description: "Play the selection", shortcutId: "timeline.playSelection" },
+      { keys: ["Shift", "D"], description: "Play from the cue", shortcutId: "timeline.playFromCue" },
+      { keys: ["D"], description: "Toggle return to cue", shortcutId: "timeline.toggleReturnToCue" },
       { keys: ["Shift", "L"], description: "Loop the playback range", shortcutId: "global.toggleLoop" },
-      { keys: ["ArrowLeft"], description: "Nudge selected words / instance earlier" },
-      { keys: ["ArrowRight"], description: "Nudge selected words / instance later" },
+      { keys: ["ArrowLeft"], description: "Nudge selected words / instance earlier", shortcutId: "timeline.nudgeLeft" },
+      { keys: ["ArrowRight"], description: "Nudge selected words / instance later", shortcutId: "timeline.nudgeRight" },
       { keys: ["Mod", "Shift", "D"], description: "Detach current instance", shortcutId: "timeline.detachInstance" },
       { keys: ["Mod", "Shift", "G"], description: "Delete current group", shortcutId: "timeline.deleteGroup" },
     ],
@@ -230,4 +233,4 @@ const ShortcutSection: React.FC<ShortcutSectionProps> = ({ title, shortcuts }) =
 
 // -- Exports ------------------------------------------------------------------
 
-export { KeyBadge, ShortcutSection, SHORTCUT_SECTIONS };
+export { KeyBadge, SHORTCUT_SECTIONS, ShortcutSection };

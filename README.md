@@ -20,11 +20,9 @@
 
 ## Why Composer
 
-Tools like [AMLL TTML Tool](https://amll-ttml-tool.stevexmh.net/) are powerful, and if you already know TTML they're great. If you're new to syncing lyrics, the learning curve is steep. There's no obvious place to start, and the interface expects you to understand word-level timing and agent roles before you've synced a single line.
+You don't need to know TTML to use Composer. Import a song, paste the lyrics and sync them, by tapping along or by dragging words on the Timeline. Use the step-by-step tabs or the Timeline, whichever suits you. They edit the same project.
 
-Composer is built around one linear path: import, edit, sync, export. Each tab is one step. You don't need to know what TTML is. Paste your lyrics, tap along with the music, and you have a synced file.
-
-When you want more control, the Timeline does everything from one screen: load audio, add lyrics, drag word blocks on the waveform, split syllables, assign singers, and preview the result. Most people start with the tabs and move to the Timeline once they're comfortable.
+The heavy tools are there when a song asks for them. Composer can separate the vocals and align each word to the voice, which leaves you fixing what it missed instead of timing every syllable. A pitch line, a spectrogram, a beat grid and choruses that share timing are all built in.
 
 ## How it works
 
@@ -67,6 +65,52 @@ Your work saves automatically in the browser as you go. Audio files you load sta
 - Themes, with dark and light presets and a custom theme editor
 - Keyboard shortcuts for nearly everything, all of them remappable
 - Searchable help and settings, plus [written guides](https://composer.betterlyrics.org/guides) on TTML and syncing
+
+## Compared to other editors
+
+Other TTML editors treat ease of use as optional. Composer is the best way to sync lyrics, and it isn't close.
+
+Most TTML editors are [AMLL TTML Tool](https://tool.amll.dev/) or a fork of it. The forks add features on top but keep the same design underneath. You open it to a screen of twenty-odd fields you can't use yet. Then you sync by pressing F, G and H on every word, start to finish, and hunt down the misses on a spectrogram.
+
+If tapping along were good enough, nobody would edit audio in a DAW. Composer gives you one. Every word is a block on the waveform, so you put it where you see the voice start. Move a whole verse at once, loop the bit you're fixing, and hear the audio as you drag. Or let Composer separate the vocals and time every word, then fix what it missed. Group a chorus once and every repeat follows.
+
+At the time of writing, AMLL TTML Tool has 30 open issues, among them stuttering playback and a spectrogram that slips out of line with the audio. Those are the two things a sync tool can't get wrong.
+
+Composer keeps every singer the song has, names included, through import and export. You can see the difference in finished files. One in ten Composer syncs on Unison has three or more singers. In AMLL's own reviewed database, fewer than one in a hundred do.
+
+| | Composer | AMLL TTML Tool |
+| --- | --- | --- |
+| Sync | Auto-align, drag on the Timeline, or tap | Tap F, G and H |
+| Auto-align to the vocals | Yes | No |
+| Vocal separation | Yes | No |
+| Timeline | Select many words, stretch, split, copy and paste | Drag word and line edges on a spectrogram |
+| Snaps to | Vocal onsets, beats, your markers, nearby words, the playhead | Other lines and the playhead |
+| Hear the audio as you drag | Yes, with pitch kept | No |
+| Pitch line | Yes | No |
+| Spectrogram | Yes | Yes |
+| Repeated sections | Groups: time one and every copy follows | Copy by hand |
+| Loop and cue | Loop a selection, a group or any range, and play from a cue | No |
+| Singers | Any number, named, plus groups | Lead or duet |
+| Singer names in the TTML | Kept | Dropped |
+| Translations and romanization | Generated or typed | Typed |
+| Sync non-Latin lyrics by their romanization | Yes, one key switches | No |
+| Keyboard | Nearly 100 remappable shortcuts, with presets that include AMLL's keys | 36, none for splitting, merging or nudging words |
+| Help | Searchable in the app, a tour on your own song, written guides | A link to docs in Chinese |
+| YouTube as audio source | Yes | No |
+
+### Good syncs by default
+
+We care about the details most editors skip. Sync snaps to vocal onsets and beats. Auto-align times each word from the separated vocals. Link a repeated chorus and every copy shares one timing, so the second can never drift from the first.
+
+That's why [Unison](https://unison.betterlyrics.org) publishes a sync the moment you submit it. Other lyric databases make every submission wait for a reviewer. We don't. When the Better Lyrics Council finds one it likes, it gets the BLCA seal, our version of an editor's pick. Two thirds of Unison was made in Composer, and Composer syncs are the ones the Council keeps sealing. Start with [Earrings](https://unison.betterlyrics.org/song/BI9HQCzpDgQ), [Touch The Sky](https://unison.betterlyrics.org/song/B95OUKk7alM) or [On My Way](https://unison.betterlyrics.org/song/ZM8rAsTT7yE).
+
+### It stays smooth
+
+The Timeline only redraws while something moves. Separation, pitch tracking, alignment and audio analysis all run in the background. Playback and dragging stay responsive on long songs and slower machines.
+
+### It keeps your work
+
+Projects save as you go and every edit can be undone. If the browser still holds something, the recovery page can bring it back. Singers, names, groups and background vocals all survive a round trip through TTML.
 
 ## Standards
 
@@ -131,7 +175,7 @@ HTDemucs is the official Facebook AI Research model (`facebookresearch/demucs`, 
 ./scripts/upload-htdemucs.sh composer-vocal-models
 ```
 
-`build-htdemucs-onnx.sh` clones `sevagh/demucs.onnx` into `/tmp/composer-htdemucs-build/`, sets up a Python venv, runs the official converter, then converts the fp32 export to fp16 with `onnxconverter-common`. At the end it prints the model's input and output names and its SHA-256. Check those against `src/audio/separation/worker.ts` and `src/audio/separation/model-registry.ts`.
+`build-htdemucs-onnx.sh` clones `sevagh/demucs.onnx` into `/tmp/composer-htdemucs-build/`, sets up a Python venv, runs the official converter, then converts the fp32 export to mixed-precision fp16 with `onnxconverter-common` (`scripts/convert-htdemucs-fp16.py` keeps the ops that break in fp16 on WebGPU in fp32). At the end it prints the model's input and output names and its SHA-256. Check those against `src/audio/separation/worker.ts` and `src/audio/separation/model-registry.ts`.
 
 ### One-time R2 setup
 
@@ -142,6 +186,19 @@ HTDemucs is the official Facebook AI Research model (`facebookresearch/demucs`, 
 5. Set `VITE_VOCAL_MODEL_BASE_URL=https://models.composer.betterlyrics.org` at build time.
 
 Cost: free egress, and about $0.0015 a month to store the fp16 model.
+
+### High quality vocals (Mel-Band RoFormer)
+
+Settings > Models > Vocal model also offers "High quality vocals": Kimberley Jensen's [Mel-Band RoFormer vocal model](https://huggingface.co/KimberleyJSN/melbandroformer) (MIT), converted to fp16 ONNX. Its stems are cleaner than HTDemucs's, but it's a 437 MB download and slower. On a laptop RTX 4070 it runs at about 3x real time (a 3.5-minute song in about 70 s). It's offered only where WebGPU has `shader-f16`, because the fp32 model doesn't fit in browser GPU memory. If a run fails, the song is separated with HTDemucs instead.
+
+The model is 14 consecutive graphs (the STFT, band split and inverse STFT run in JavaScript), served from `$VITE_VOCAL_MODEL_BASE_URL/mel-band-roformer/` with a notice that the app links to. Every file's size and SHA-256 is pinned in `src/audio/separation/roformer/model-parts.ts`, and a download that doesn't match is rejected. [`scripts/mel-band-roformer/`](scripts/mel-band-roformer/README.md) builds the graphs from the checkpoint and uploads them through R2's S3 API:
+
+```bash
+R2_ACCOUNT_ID=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... \
+  ./scripts/upload-mel-band-roformer.sh composer-vocal-models ./mel-band-roformer-parts
+```
+
+The script checks each file against its pin and never replaces a model file that already exists. `scripts/mel-band-roformer/MEL_BAND_ROFORMER_KJ_NOTICE.txt` lists the source checkpoint (Hugging Face revision and SHA-256), the conversion and the licenses.
 
 ### Trying other alignment checkpoints
 
@@ -165,6 +222,7 @@ Auto-align uses HubertFA v0.0.7 by default. To try other checkpoints with the sa
 - `model` and the optional `dictionary` (the English pronunciation dictionary, defaulting to the v0.0.7 one) are URLs, relative to the manifest.
 - `languages` lists the language codes a checkpoint was trained for. It defaults to the base model's English, Mandarin and Japanese. When the checkpoints cover different languages, the picker gets a tab per language.
 - `"recommended": true` tags a checkpoint as the one to use. The setting defaults to **Recommended**, which follows whichever checkpoint has the tag, so moving the tag moves everyone who hasn't picked a model by hand. With no tagged checkpoint, Recommended uses v0.0.7; with several, the first one listed. The id `recommended` is reserved for this, so an entry with it is skipped.
+- `terms` is for a checkpoint whose license asks that its users be told about it, such as one derived from weights under a restricted-use license: `"terms": {"notice": "Derived from Example. By using this model you agree to the Example License 1.0.", "url": "EXAMPLE_LICENSE.txt"}`. An info button with the notice and a link to the full license at `url` (relative to the manifest) then sits next to the model in the picker, the setting and the auto-align popover. An entry whose `terms` lacks either is skipped rather than listed without them.
 - The picker lists checkpoints in manifest order, after the built-in model, and can sort them by name instead. Numbers in names sort as numbers, so `step 900` comes before `step 5000`.
 - The phone vocabulary is bundled with the app (`src/audio/alignment/hubertfa/vocab.json`), so a checkpoint with a different phone set needs a code change, not a manifest entry.
 - The browser caches each model by URL, so give every export a new file name. Re-uploading under the same name keeps serving the old copy.

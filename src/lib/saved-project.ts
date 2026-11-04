@@ -31,11 +31,14 @@ interface SavedProject {
   dismissedMetadataMatches?: string[];
   currentStem?: Stem;
   primingStripped?: boolean;
+  primingCorrected?: boolean;
   customSnapPoints?: (SnapPoint | number)[];
   beatGrid?: unknown;
   hasUnexportedImport?: boolean;
   importedMetadataKeys?: MetadataKey[];
   ttmlEditState?: TtmlEditState;
+  alignedTimings?: unknown;
+  alignmentNoticeDismissed?: boolean;
 }
 
 interface SavedAudioFile {

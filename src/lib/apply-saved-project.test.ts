@@ -2,7 +2,7 @@ import type { Agent } from "@/domain/agent/model";
 import { detectedGrid } from "@/domain/tempo/beat-grid";
 import { withOffset } from "@/domain/tempo/grid-edits";
 import { applySavedProject } from "@/lib/apply-saved-project";
-import { buildSaveInput } from "@/lib/project-snapshot";
+import { buildSaveInput, currentSaveInput } from "@/lib/project-snapshot";
 import type { SavedProject } from "@/lib/saved-project";
 import { useProjectStore } from "@/stores/project";
 import { createGroup, createLine, createProjectSaveInput } from "@/test/factories";
@@ -61,6 +61,18 @@ describe("applySavedProject", () => {
       expect(state.history).toEqual([]);
       expect(state.historyIndex).toBe(-1);
       expect(state.isDirtySinceHistory).toBe(false);
+    });
+
+    it("regression: stores timing for background vocals saved on a synced line without words", () => {
+      const legacy = createLine({ id: "l1", text: "hello", begin: 10, end: 14, backgroundText: "ooh" });
+
+      for (const origin of ["storage", "file"] as const) {
+        applySavedProject(projectFile({ lines: [legacy] }), origin);
+
+        const state = useProjectStore.getState();
+        expect(state.lines[0].backgroundWords?.[0]).toMatchObject({ begin: 12, end: 14 });
+        expect(state.isDirty).toBe(false);
+      }
     });
 
     it("regression: drops imported metadata keys a hand-edited file does not know", () => {
@@ -141,5 +153,17 @@ describe("applySavedProject", () => {
 
       expect(useProjectStore.getState().beatGrid).toBeNull();
     });
+  });
+});
+
+describe("primingCorrected", () => {
+  it("a project made by this build saves it true", () => {
+    useProjectStore.getState().reset();
+    expect(currentSaveInput().primingCorrected).toBe(true);
+  });
+
+  it("a stored project saved before the fix restores it false", () => {
+    applySavedProject(projectFile({ primingCorrected: undefined }), "storage");
+    expect(useProjectStore.getState().primingCorrected).toBe(false);
   });
 });

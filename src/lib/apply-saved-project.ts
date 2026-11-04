@@ -1,4 +1,6 @@
 import { DEFAULT_AGENTS } from "@/domain/agent/colors";
+import { readAlignedTimings } from "@/domain/alignment/fingerprint";
+import { withSeededBackground } from "@/domain/line/background";
 import { savedExportTiming } from "@/domain/project/export-timing";
 import { isMetadataKey } from "@/domain/project/imported-metadata";
 import { normalizeLoadedMetadata } from "@/domain/project/normalize-metadata";
@@ -27,7 +29,7 @@ function malformedFieldsOf(project: SavedProject): string[] {
 function applySavedProject(project: SavedProject, origin: SavedProjectOrigin): string[] {
   const state = useProjectStore.getState();
   state.setMetadata(normalizeLoadedMetadata(project.metadata));
-  state.setLines(project.lines ?? []);
+  state.setLines((project.lines ?? []).map(withSeededBackground));
   state.setGroups(project.groups ?? []);
   state.setGranularity(project.granularity ?? useSettingsStore.getState().defaultGranularity);
   state.setExportTiming(savedExportTiming(project.exportTiming));
@@ -36,13 +38,17 @@ function applySavedProject(project: SavedProject, origin: SavedProjectOrigin): s
   state.setDismissedSuggestions(project.dismissedSuggestions ?? []);
   state.setDismissedExplicitSuggestions(project.dismissedExplicitSuggestions ?? []);
   state.setDismissedMetadataMatches(project.dismissedMetadataMatches ?? []);
-  // The flag describes stored timings against the stored audio, which a project file does not carry.
-  if (origin === "storage") state.setPrimingStripped(project.primingStripped ?? false);
+  // The flags describe stored timings against the stored audio, which a project file does not carry.
+  if (origin === "storage") {
+    state.setPrimingStripped(project.primingStripped ?? false);
+    state.setPrimingCorrected(project.primingCorrected ?? false);
+  }
   state.setCustomSnapPoints(project.customSnapPoints ?? []);
   state.setBeatGrid(readBeatGrid(project.beatGrid));
   if (origin === "file" || project.hasUnexportedImport) state.markSongDetailsImported();
   state.restoreImportedMetadataKeys((project.importedMetadataKeys ?? []).filter(isMetadataKey));
   state.setTtmlEditState(project.ttmlEditState ?? null);
+  state.restoreAlignmentReview(readAlignedTimings(project.alignedTimings), project.alignmentNoticeDismissed === true);
   if (origin === "file") state.clearHistory();
   state.markClean();
   return malformedFieldsOf(project);

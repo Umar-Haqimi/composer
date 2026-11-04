@@ -1,5 +1,4 @@
 import { pastedRows } from "@/domain/language/paste-import";
-import { useLanguagesHistoryShortcuts } from "@/hooks/useLanguagesHistoryShortcuts";
 import type { LlmProfile } from "@/services/llm/llm-profile";
 import { resolveTranslationProvider } from "@/services/resolve-translation-provider";
 import { useProjectStore } from "@/stores/project";
@@ -138,7 +137,6 @@ const LanguagesPanel: React.FC = () => {
     },
     [activeTab, project],
   );
-  useLanguagesHistoryShortcuts(activeTab === "languages");
   const languageName = useMemo(() => new Map<string, string>(LANGUAGE_OPTIONS), []);
   const availableLanguages = LANGUAGE_OPTIONS.filter(([code]) => !targets.includes(code));
   const removeTarget = (language: string) => {

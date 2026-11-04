@@ -1,8 +1,10 @@
+import { withSeededBackground } from "@/domain/line/background";
 import { type TimeRange, timeRangeResolver } from "@/domain/group/shared-timing";
 import type { LinkGroup } from "@/domain/group/template";
 import { applyLineUpdates } from "@/domain/line/apply-line-updates";
+import { mergeUpdates } from "@/domain/line/merge-line-updates";
 import { mainBounds } from "@/domain/line/bounds";
-import type { LineUpdate, LooseLine, LyricLine } from "@/domain/line/model";
+import { type LineUpdate, type LyricLine, reconcileLine } from "@/domain/line/model";
 import { isLineSynced } from "@/domain/line/predicates";
 import { clampShiftDelta, shiftLineTiming, shiftWords } from "@/domain/line/shift";
 import { isSyncableLine } from "@/domain/line/sync-progress";
@@ -129,8 +131,13 @@ function backgroundFor(line: LyricLine, begin: number): { backgroundWords?: Word
   if (line.backgroundWords?.length) {
     return oldMain ? { backgroundWords: shiftWords(line.backgroundWords, begin - oldMain.begin) } : {};
   }
-  if (!oldMain && line.backgroundText) return { backgroundWords: createInitialBgWords(line.backgroundText, begin) };
+  if (line.backgroundText) return { backgroundWords: createInitialBgWords(line.backgroundText, begin) };
   return {};
+}
+
+function withSeededBackgroundUpdate(line: LyricLine, updates: Partial<LyricLine>): Partial<LyricLine> {
+  const backgroundWords = withSeededBackground(reconcileLine({ ...line, ...updates })).backgroundWords;
+  return backgroundWords === line.backgroundWords ? updates : { ...updates, backgroundWords };
 }
 
 // -- Word slot writing ----------------------------------------------------------
@@ -193,7 +200,7 @@ function writeLine(lines: readonly LyricLine[], gestureCtx: GestureContext): Slo
   const delta = oldMain ? clampShiftDelta([line], Math.max(ctx.time, floor) - oldMain.begin, range) : 0;
   const begin = oldMain ? oldMain.begin + delta : Math.max(ctx.time, floor);
   const updates: Partial<LyricLine> = oldMain
-    ? shiftLineTiming(line, delta)
+    ? withSeededBackgroundUpdate(line, shiftLineTiming(line, delta))
     : { begin, end: begin, ...backgroundFor(line, begin) };
 
   return {
@@ -225,29 +232,7 @@ function closeHeld(lines: readonly LyricLine[], cursor: SyncCursor, time: number
   };
 }
 
-// -- Merge and apply ---------------------------------------------------------------
-
-// Narrows like reconcileLine for timed words, so one merged update lands the same as the two applied in order.
-function mergeLineUpdate(first: Partial<LyricLine>, second: Partial<LyricLine>): Partial<LyricLine> {
-  const merged: Partial<LooseLine> = { ...first, ...second };
-  const { words, begin, end, ...rest } = merged;
-  if (words !== undefined) return { ...rest, words };
-  return {
-    ...rest,
-    ...("words" in merged ? { words } : {}),
-    ...("begin" in merged ? { begin } : {}),
-    ...("end" in merged ? { end } : {}),
-  };
-}
-
-function mergeUpdates(a: readonly LineUpdate[], b: readonly LineUpdate[]): LineUpdate[] {
-  const merged = new Map(a.map((u) => [u.id, u.updates]));
-  for (const u of b) {
-    const earlier = merged.get(u.id);
-    merged.set(u.id, earlier ? mergeLineUpdate(earlier, u.updates) : u.updates);
-  }
-  return [...merged].map(([id, updates]) => ({ id, updates }));
-}
+// -- Apply ----------------------------------------------------------------------
 
 function slotWriteToUpdates(write: SlotWrite): LineUpdate[] {
   return write.closes ? [write.update, write.closes] : [write.update];

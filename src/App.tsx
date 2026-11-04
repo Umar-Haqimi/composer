@@ -3,6 +3,7 @@ import { useAutoSeparate } from "@/hooks/useAutoSeparate";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { useImportFromHash } from "@/hooks/useImportFromHash";
+import { useImportFromLinkedFiles } from "@/hooks/useImportFromLinkedFiles";
 import { useImportFromQuery } from "@/hooks/useImportFromQuery";
 import { useImportFromYouTube } from "@/hooks/useImportFromYouTube";
 import { useLanguageAutoRefresh } from "@/hooks/useLanguageAutoRefresh";
@@ -11,6 +12,8 @@ import { useMusicBrainzMatch } from "@/hooks/useMusicBrainzMatch";
 import { usePanicRecovery } from "@/hooks/usePanicRecovery";
 import { usePersistence } from "@/hooks/usePersistence";
 import { usePitchTrack } from "@/hooks/usePitchTrack";
+import { useShortcutPresetIntro } from "@/hooks/useShortcutPresetIntro";
+import { useSpaceHabitHint } from "@/hooks/useSpaceHabitHint";
 import { useProjectChannel } from "@/hooks/useProjectChannel";
 import { useProjectShortcuts } from "@/hooks/useProjectShortcuts";
 import { useResolveYouTubeTunnel } from "@/hooks/useResolveYouTubeTunnel";
@@ -61,6 +64,8 @@ const AppShell: React.FC = () => {
   const source = useAudioStore((s) => s.source);
   const helpOpen = useUIStore((s) => s.helpOpen);
   const helpLocation = useUIStore((s) => s.helpLocation);
+  const helpSession = useUIStore((s) => s.helpSession);
+  const settingsSession = useUIStore((s) => s.settingsSession);
   const openHelp = useUIStore((s) => s.openHelp);
   const closeHelp = useUIStore((s) => s.closeHelp);
   const [tourRequested, setTourRequested] = useState(false);
@@ -111,6 +116,7 @@ const AppShell: React.FC = () => {
   useProjectShortcuts(isEditor);
   useSaveShortcut(isEditor);
   useImportFromHash();
+  useImportFromLinkedFiles();
   useResolveYouTubeTunnel();
   useImportFromQuery();
   useImportFromYouTube();
@@ -120,6 +126,8 @@ const AppShell: React.FC = () => {
   useDocumentTitle(screen);
   useVocalOnsetSnapPoints();
   usePitchTrack();
+  useSpaceHabitHint(isEditor);
+  useShortcutPresetIntro(isEditor);
 
   const setHelpOpenCb = useCallback((open: boolean) => (open ? openHelp() : closeHelp()), [openHelp, closeHelp]);
   const setSettingsOpenCb = useCallback(
@@ -153,11 +161,7 @@ const AppShell: React.FC = () => {
         onTourStart={startTourFromHeader}
       />
       <HelpModal
-        key={
-          helpOpen
-            ? `help-${helpLocation.section}-${helpLocation.scrollTop}-${helpLocation.query ?? ""}`
-            : "help-closed"
-        }
+        key={`help-${helpSession}`}
         isOpen={helpOpen}
         initialSection={helpLocation.section}
         initialScrollTop={helpLocation.scrollTop}
@@ -165,7 +169,7 @@ const AppShell: React.FC = () => {
         onClose={closeHelp}
       />
       <SettingsModal
-        key={settingsOpen ? "settings-open" : "settings-closed"}
+        key={`settings-${settingsSession}`}
         isOpen={settingsOpen}
         onClose={closeSettings}
       />

@@ -2,6 +2,7 @@ import { snapPointTimes } from "@/domain/snap-point/model";
 import { useFrameLoop } from "@/hooks/use-frame-loop";
 import { useProjectStore } from "@/stores/project";
 import { useSettingsStore } from "@/stores/settings";
+import { useBandEmpty } from "@/views/timeline/band-empty";
 import { useOverviewBandHeight } from "@/views/timeline/overview-band-height";
 import { computeCoveredOnsets, isTimeOnOnset } from "@/views/timeline/snap-marker-math";
 import { SnapMarkerPin } from "@/views/timeline/snap-marker-pin";
@@ -9,6 +10,7 @@ import { GUTTER_WIDTH, useTimelineStore } from "@/views/timeline/timeline-store"
 import { useSnapMarkerDrag } from "@/views/timeline/use-snap-marker-drag";
 import { AnimatePresence } from "motion/react";
 import { useMemo, useRef } from "react";
+import { viewScrollLeft } from "@/views/timeline/view-scroll";
 
 // -- Types ---------------------------------------------------------------------
 
@@ -43,7 +45,7 @@ const SnapMarkersOverlay: React.FC<SnapMarkersOverlayProps> = ({ scrollContainer
   const removeCustomSnapPoint = useProjectStore((s) => s.removeCustomSnapPoint);
   const markerMode = useTimelineStore((s) => s.markerMode);
   const showOnsets = useSettingsStore((s) => s.vocalOnsetSnap);
-  const thresholdPx = useSettingsStore((s) => s.timelineSnapThreshold);
+  const thresholdPx = useSettingsStore((s) => s.snapDistanceOnsets);
 
   const { draggingId, draggingTime, onHeadPointerDown } = useSnapMarkerDrag({ scrollContainerRef });
 
@@ -57,13 +59,15 @@ const SnapMarkersOverlay: React.FC<SnapMarkersOverlayProps> = ({ scrollContainer
   const layerRef = useRef<HTMLDivElement>(null);
 
   const visibleOnsetCount = showOnsets ? vocalOnsetSnapPoints.length : 0;
-  const isVisible = visibleOnsetCount > 0 || customSnapPoints.length > 0 || markerMode;
+  // An unmounted pin never gets its pointerup, so the drag would not commit.
+  const hiddenWhileLoading = useBandEmpty() && draggingId === null;
+  const isVisible = !hiddenWhileLoading && (visibleOnsetCount > 0 || customSnapPoints.length > 0 || markerMode);
 
   useFrameLoop(
     () => {
       const layer = layerRef.current;
       if (layer) {
-        const scrollLeft = scrollContainerRef.current?.scrollLeft ?? useTimelineStore.getState().scrollLeft;
+        const scrollLeft = viewScrollLeft();
         layer.style.transform = `translate3d(${GUTTER_WIDTH - scrollLeft}px, 0, 0)`;
       }
     },
@@ -105,7 +109,7 @@ const SnapMarkersOverlay: React.FC<SnapMarkersOverlayProps> = ({ scrollContainer
           </div>
         )}
         <div className="absolute inset-0 pointer-events-none z-20">
-          <AnimatePresence initial={false}>
+          <AnimatePresence>
             {customSnapPoints.map((point) => (
               <SnapMarkerPin
                 key={point.id}

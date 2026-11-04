@@ -1,3 +1,4 @@
+import type { AlignmentReviewActions, AlignmentReviewState } from "@/stores/project/alignment-review-slice";
 import type { Agent } from "@/domain/agent/model";
 import type { RealignRefusal, SharingOutcome } from "@/domain/group/shared-placement";
 import type { LineTemplate, LinkGroup } from "@/domain/group/template";
@@ -64,6 +65,7 @@ interface UiState {
   activeTab: ProjectTab;
   syllableSplitDefaults: SyllableSplitDefaults;
   primingStripped: boolean;
+  primingCorrected: boolean;
 }
 
 interface DismissalsState {
@@ -126,6 +128,7 @@ interface UiActions {
   setActiveTab: (tab: ProjectTab) => void;
   setSyllableSplitDefaults: (defaults: SyllableSplitDefaults) => void;
   setPrimingStripped: (value: boolean) => void;
+  setPrimingCorrected: (value: boolean) => void;
 }
 
 interface DismissalActions {
@@ -245,6 +248,7 @@ type ProjectState = MetadataState &
   DismissalsState &
   SnapPointsState &
   BeatGridState &
+  AlignmentReviewState &
   HistoryState;
 
 type ProjectActions = MetadataActions &
@@ -255,7 +259,8 @@ type ProjectActions = MetadataActions &
   BeatGridActions &
   HistoryActions &
   LineActions &
-  GroupActions;
+  GroupActions &
+  AlignmentReviewActions;
 
 type ProjectStore = ProjectState & ProjectActions;
 

@@ -1,6 +1,6 @@
+import { repeatKey, withEvenSyllableSplits } from "@/domain/group/syllable-splits";
 import type { LyricLine } from "@/domain/line/model";
 import { hasMainLyrics } from "@/domain/line/predicates";
-import { structurallyEqualLineSequences } from "@/views/timeline/structural-match";
 
 interface RepeatingSection {
   starts: number[];
@@ -8,26 +8,47 @@ interface RepeatingSection {
   preview: string;
   previewLines: string[];
   fingerprint: string;
+  evenedSplitLines: number;
 }
 
-function findRepeatingStandaloneSections(lines: LyricLine[]): RepeatingSection[] {
-  const results: RepeatingSection[] = [];
+const MIN_SECTION_LINES = 3;
+const SHORT_SECTION_LINES = 2;
+
+// Two-line repeats only fill lines the longer repeats left, so they never break up a chorus.
+function findRepeatingStandaloneSections(lines: LyricLine[], splitChar: string): RepeatingSection[] {
+  const keys = lines.map((line) => repeatKey(line, splitChar));
   const claimed = new Set<number>();
+  const sections = claimSections(lines, keys, claimed, splitChar, MIN_SECTION_LINES);
+  for (const p of chantLoopLines(lines, keys, SHORT_SECTION_LINES)) claimed.add(p);
+  const shortSections = claimSections(lines, keys, claimed, splitChar, SHORT_SECTION_LINES, SHORT_SECTION_LINES);
+  return [...sections, ...shortSections].toSorted((a, b) => a.starts[0] - b.starts[0]);
+}
+
+function claimSections(
+  lines: LyricLine[],
+  keys: string[],
+  claimed: Set<number>,
+  splitChar: string,
+  minK: number,
+  maxK = Number.POSITIVE_INFINITY,
+): RepeatingSection[] {
+  const results: RepeatingSection[] = [];
 
   for (let i = 0; i < lines.length; i++) {
     if (claimed.has(i)) continue;
     if (lines[i].groupId !== undefined) continue;
 
-    let best: { starts: number[]; k: number } | null = null;
-    const maxK = Math.floor((lines.length - i) / 2);
-    for (let k = maxK; k >= 2; k--) {
+    let best: { starts: number[]; k: number; evened: LyricLine[] } | null = null;
+    for (let k = Math.min(maxK, Math.floor((lines.length - i) / 2)); k >= minK; k--) {
       if (!isStandaloneBlock(lines, i, k, claimed)) continue;
-      const starts = repeatStarts(lines, i, k, claimed);
-      if (starts.length >= 2 && (!best || starts.length * k > best.starts.length * best.k)) best = { starts, k };
+      const starts = repeatStarts(lines, keys, i, k, claimed);
+      if (starts.length < 2 || (best && starts.length * k <= best.starts.length * best.k)) continue;
+      const candidate = evenableStarts(lines, starts, k, splitChar);
+      if (candidate && (!best || candidate.starts.length * k > best.starts.length * best.k)) best = { ...candidate, k };
     }
 
     if (best) {
-      const { starts, k } = best;
+      const { starts, k, evened } = best;
       for (const s of starts) {
         for (let p = s; p < s + k; p++) claimed.add(p);
       }
@@ -37,6 +58,7 @@ function findRepeatingStandaloneSections(lines: LyricLine[]): RepeatingSection[]
         preview: lines[i].text,
         previewLines: lines.slice(i, i + k).map((l) => l.text),
         fingerprint: fingerprintBlock(lines, i, k),
+        evenedSplitLines: changedLineCount(lines, evened, starts, k),
       });
       i = i + k - 1;
     }
@@ -45,12 +67,42 @@ function findRepeatingStandaloneSections(lines: LyricLine[]): RepeatingSection[]
   return results;
 }
 
-function repeatStarts(lines: LyricLine[], start: number, k: number, claimed: Set<number>): number[] {
-  const block = lines.slice(start, start + k);
+// Lines of a short block sung again right after itself are a chant loop, not a repeated section.
+function chantLoopLines(lines: LyricLine[], keys: string[], k: number): number[] {
+  const loopLines: number[] = [];
+  for (let start = 0; start + 2 * k <= keys.length; start++) {
+    if (!blocksRepeat(keys, start, start + k, k)) continue;
+    if (!lines.slice(start, start + 2 * k).every(hasMainLyrics)) continue;
+    for (let p = start; p < start + 2 * k; p++) loopLines.push(p);
+  }
+  return loopLines;
+}
+
+// A copy whose splits cross the others' is left out, so it cannot hide the copies that agree.
+function evenableStarts(
+  lines: LyricLine[],
+  starts: number[],
+  k: number,
+  splitChar: string,
+): { starts: number[]; evened: LyricLine[] } | null {
+  const evened = withEvenSyllableSplits(lines, starts, k, splitChar);
+  if (evened) return { starts, evened };
+  const kept = [starts[0]];
+  let keptEvened: LyricLine[] | null = null;
+  for (const start of starts.slice(1)) {
+    const withStart = withEvenSyllableSplits(lines, [...kept, start], k, splitChar);
+    if (!withStart) continue;
+    kept.push(start);
+    keptEvened = withStart;
+  }
+  return keptEvened ? { starts: kept, evened: keptEvened } : null;
+}
+
+function repeatStarts(lines: LyricLine[], keys: string[], start: number, k: number, claimed: Set<number>): number[] {
   const starts: number[] = [start];
   let j = start + k;
   while (j + k <= lines.length) {
-    if (isStandaloneBlock(lines, j, k, claimed) && structurallyEqualLineSequences(block, lines.slice(j, j + k))) {
+    if (blocksRepeat(keys, start, j, k) && isStandaloneBlock(lines, j, k, claimed)) {
       starts.push(j);
       j += k;
     } else {
@@ -58,6 +110,20 @@ function repeatStarts(lines: LyricLine[], start: number, k: number, claimed: Set
     }
   }
   return starts;
+}
+
+function blocksRepeat(keys: string[], a: number, b: number, k: number): boolean {
+  for (let p = 0; p < k; p++) {
+    if (keys[a + p] !== keys[b + p]) return false;
+  }
+  return true;
+}
+
+function changedLineCount(lines: LyricLine[], evened: LyricLine[], starts: number[], k: number): number {
+  return starts.reduce((count, start) => {
+    for (let p = start; p < start + k; p++) if (evened[p] !== lines[p]) count++;
+    return count;
+  }, 0);
 }
 
 function fingerprintBlock(lines: LyricLine[], start: number, length: number): string {

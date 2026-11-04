@@ -51,8 +51,8 @@ describe("vocal model settings", () => {
     useSettingsStore.setState({ ...DEFAULTS });
   });
 
-  it("defaults to fp32 for stable browser inference", () => {
-    expect(useSettingsStore.getState().vocalModelVariant).toBe("fp32");
+  it("defaults to fp16", () => {
+    expect(useSettingsStore.getState().vocalModelVariant).toBe("fp16");
   });
 });
 
@@ -243,9 +243,11 @@ describe("settings v2 -> v3 migration", () => {
     expect(migrated.previewSidebar).toBe(true);
   });
 
-  it("still applies the vocalModelVariant fp16 -> fp32 rule", async () => {
-    const migrated = migrateSettings({ vocalModelVariant: "fp16" }, 2) as { vocalModelVariant: string };
-    expect(migrated.vocalModelVariant).toBe("fp32");
+  it("moves the old fp32 default to fp16 but keeps an fp32 chosen since v17", async () => {
+    const fromV16 = migrateSettings({ vocalModelVariant: "fp32" }, 16) as { vocalModelVariant: string };
+    expect(fromV16.vocalModelVariant).toBe("fp16");
+    const fromV17 = migrateSettings({ vocalModelVariant: "fp32" }, 17) as { vocalModelVariant: string };
+    expect(fromV17.vocalModelVariant).toBe("fp32");
   });
 });
 
@@ -270,6 +272,25 @@ describe("settings v4 -> v5 migration (snapPlayheadToPoints)", () => {
   it("preserves an explicitly disabled snapPlayheadToPoints", async () => {
     const migrated = migrateSettings({ snapPlayheadToPoints: false }, 4) as { snapPlayheadToPoints: boolean };
     expect(migrated.snapPlayheadToPoints).toBe(false);
+  });
+});
+
+describe("settings v14 -> v15 migration (snap distance per source)", () => {
+  it("seeds every source's distance from the old single threshold and drops it", () => {
+    const migrated = migrateSettings({ timelineSnapThreshold: 20 }, 14) as Record<string, unknown>;
+    expect(migrated).toMatchObject({
+      snapDistanceWords: 20,
+      snapDistanceMarkers: 20,
+      snapDistanceOnsets: 20,
+      snapDistanceBeats: 20,
+      snapDistancePlayhead: 20,
+    });
+    expect(migrated).not.toHaveProperty("timelineSnapThreshold");
+  });
+
+  it("leaves the defaults in place when no threshold was saved", () => {
+    const migrated = migrateSettings({ defaultZoom: 200 }, 14) as Record<string, unknown>;
+    expect(migrated).not.toHaveProperty("snapDistanceWords");
   });
 });
 

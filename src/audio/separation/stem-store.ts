@@ -1,3 +1,4 @@
+import { primingDecodeTag } from "@/audio/decoded-source-audio";
 import {
   type StemRecord,
   derivedRecordKey,
@@ -51,6 +52,17 @@ function makeKey(audioHash: string, stem: Stem, variant: VocalModelVariant): str
 
 function stemJobKey(audioHash: string, variant: VocalModelVariant): string {
   return `${audioHash}|${variant}|v${STEM_CACHE_VERSION}`;
+}
+
+// Stems are stored under the model that made them. With the RoFormer picked, a song it couldn't separate has
+// HTDemucs stems from the fallback, which are used until RoFormer stems exist.
+function stemLookupOrder(variant: VocalModelVariant): VocalModelVariant[] {
+  return variant === "roformer" ? ["roformer", "fp16"] : [variant];
+}
+
+async function stemCacheHash(source: Blob, audioHash: string): Promise<string> {
+  const tag = await primingDecodeTag(source);
+  return tag ? `${audioHash}-${tag}` : audioHash;
 }
 
 function onsetsKey(jobKey: string): string {
@@ -177,7 +189,9 @@ async function evictIfOverCapacity(): Promise<void> {
 // -- Exports ------------------------------------------------------------------
 
 export {
+  stemCacheHash,
   stemJobKey,
+  stemLookupOrder,
   getStem,
   getStemJobOnsets,
   hasStems,

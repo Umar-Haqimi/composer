@@ -7,6 +7,7 @@ import { isKeepYouTubeAudio } from "@/domain/storage/audio-retention";
 import { isStorageLimit } from "@/domain/storage/storage-limit";
 import type { SettingsState } from "@/stores/settings";
 import { migrateLlmProfiles } from "@/stores/settings-llm-profiles";
+import { SNAP_DISTANCE_SETTING } from "@/stores/settings-snap";
 
 // -- Types --------------------------------------------------------------------
 
@@ -14,11 +15,12 @@ interface RetiredSettings {
   confirmReplaceProjectFromHash?: boolean;
   defaultRollingEdit?: unknown;
   defaultPreviewSidebar?: unknown;
+  timelineSnapThreshold?: unknown;
 }
 
 // -- Constants ----------------------------------------------------------------
 
-const SETTINGS_PERSIST_VERSION = 14;
+const SETTINGS_PERSIST_VERSION = 17;
 
 // -- Migration ----------------------------------------------------------------
 
@@ -28,16 +30,17 @@ function migrateSettings(persistedState: unknown, version: number): unknown {
     confirmReplaceProjectFromHash: _retired,
     defaultRollingEdit,
     defaultPreviewSidebar,
+    timelineSnapThreshold,
     ...state
   } = persistedState as Partial<SettingsState> & RetiredSettings;
   const next: Partial<SettingsState> = { ...state };
   if (typeof defaultRollingEdit === "boolean") next.rollingEdit = defaultRollingEdit;
   if (typeof defaultPreviewSidebar === "boolean") next.previewSidebar = defaultPreviewSidebar;
+  if (typeof timelineSnapThreshold === "number") {
+    for (const key of Object.values(SNAP_DISTANCE_SETTING)) next[key] ??= timelineSnapThreshold;
+  }
   if (next.rollingEdit === undefined) next.rollingEdit = false;
   if (next.previewSidebar === undefined) next.previewSidebar = false;
-  if (version < 2 || next.vocalModelVariant === "fp16") {
-    next.vocalModelVariant = "fp32";
-  }
   if (next.vocalOnsetSnap === undefined) next.vocalOnsetSnap = true;
   if (next.snapPlayheadToPoints === undefined) next.snapPlayheadToPoints = true;
   if (next.redoPreroll === undefined) next.redoPreroll = 1.5;
@@ -59,6 +62,8 @@ function migrateSettings(persistedState: unknown, version: number): unknown {
   if (version < 13 && next.alignmentModelId === BUILTIN_ALIGNMENT_MODEL.id) {
     next.alignmentModelId = RECOMMENDED_ALIGNMENT_MODEL;
   }
+  // Before 17 every saved fp16 was forced back to fp32, the default, so a saved fp32 is the old default, not a choice.
+  if (version < 17) next.vocalModelVariant = "fp16";
   const {
     librarySort,
     libraryView,
@@ -69,6 +74,8 @@ function migrateSettings(persistedState: unknown, version: number): unknown {
     pitchLine,
     showSpectrum,
     spectrumBandHeight,
+    loupeWidth,
+    loupeHeight,
     spectrumSource,
     spectrumPalette,
     spectrumContrast,
@@ -83,6 +90,8 @@ function migrateSettings(persistedState: unknown, version: number): unknown {
     ...sanitizeSpectrumSettings({
       showSpectrum,
       spectrumBandHeight,
+      loupeWidth,
+      loupeHeight,
       spectrumSource,
       spectrumPalette,
       spectrumContrast,

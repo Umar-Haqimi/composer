@@ -265,6 +265,12 @@ const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     defaultBinding: { key: "r" },
   },
   {
+    id: "sync.toggleEdit",
+    scope: "sync",
+    description: "Edit timings",
+    defaultBinding: { key: "e" },
+  },
+  {
     id: "timeline.toggleFollow",
     scope: "timeline",
     description: "Toggle follow",
@@ -327,7 +333,7 @@ const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
   {
     id: "timeline.splitWord",
     scope: "timeline",
-    description: "Split word into words",
+    description: "Split into separate words",
     defaultBinding: { key: "s", shift: true },
   },
   {
@@ -413,6 +419,18 @@ const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     scope: "timeline",
     description: "Play the selection",
     defaultBinding: { key: "Enter", alt: true },
+  },
+  {
+    id: "timeline.playFromCue",
+    scope: "timeline",
+    description: "Play from the cue",
+    defaultBinding: { key: "d", shift: true },
+  },
+  {
+    id: "timeline.toggleReturnToCue",
+    scope: "timeline",
+    description: "Toggle return to cue",
+    defaultBinding: { key: "d" },
   },
   {
     id: "timeline.jumpPrevInstance",
@@ -610,5 +628,5 @@ const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
 
 // -- Exports ------------------------------------------------------------------
 
+export type { ShortcutBinding, ShortcutDefinition, ShortcutScope };
 export { SHORTCUT_DEFINITIONS };
-export type { ShortcutBinding, ShortcutScope, ShortcutDefinition };

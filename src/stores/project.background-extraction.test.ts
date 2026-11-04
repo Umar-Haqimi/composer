@@ -16,7 +16,7 @@ const CHORUS_GROUP = { id: "g1", label: "Chorus", color: "#f472b6", templateVers
 
 // -- Per-line "Pull from ( )" action through the real store -------------------
 //
-// Replicates handleExtractLine from src/views/edit.tsx: classify the target
+// Replicates handleExtractLine from src/views/edit/preview-rows.tsx: classify the target
 // line, extract its inline parentheses, and write { text, words, backgroundText }
 // via updateLineWithHistory. The reviewer claimed this desyncs linked instance
 // siblings. These tests run the real mutator and assert siblings stay in sync.

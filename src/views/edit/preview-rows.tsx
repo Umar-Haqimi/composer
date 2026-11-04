@@ -1,6 +1,6 @@
 import type { LinkGroup } from "@/domain/group/template";
 import { instanceCount, instanceOrdinal } from "@/domain/instance/enumerate";
-import { backgroundFields } from "@/domain/line/background";
+import { backgroundFields, withSeededBackground } from "@/domain/line/background";
 import { remapWordTextsPreservingTiming } from "@/domain/word/remap-text";
 import type { WordTiming } from "@/domain/word/timing";
 import { useProjectStore } from "@/stores/project";
@@ -46,6 +46,8 @@ function handleBackgroundChange(lineId: string, text: string): void {
   let words: WordTiming[] | undefined;
   if (newBgText && target?.backgroundWords?.length) {
     words = remapWordTextsPreservingTiming(target.backgroundWords, newBgText);
+  } else if (newBgText && target) {
+    words = withSeededBackground({ ...target, backgroundText: newBgText }).backgroundWords;
   }
 
   useProjectStore

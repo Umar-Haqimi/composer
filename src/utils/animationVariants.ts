@@ -53,13 +53,14 @@ const inlineIconReducedVariants: Variants = {
   exit: { opacity: 0, width: 0, marginLeft: -6 },
 };
 
-// -- Sync Carousel (vertical, direction-aware, instant) ----------------------
+// -- Sync Tap Ring -------------------------------------------------------------
 
-const syncCarouselTransition: Transition = {
-  type: "spring",
-  stiffness: 400,
-  damping: 30,
+const syncTapRingVariants: Variants = {
+  initial: { scale: 0.8, opacity: 0.5 },
+  animate: { scale: 2.2, opacity: 0 },
 };
+
+const syncTapRingTransition: Transition = { duration: 0.33, ease: "easeOut" };
 
 function buildGroupPingVariants(color: string): Variants {
   const transparent = hexToRgba(color, 0);
@@ -116,11 +117,14 @@ const snapFlashVariants: Variants = {
 
 // -- Floating Entrance --------------------------------------------------------
 
-// Popovers and menus grow out of their trigger; floating-ui runs it as a CSS transition.
+// Popovers and menus grow out of their trigger and leave toward it; floating-ui runs both as CSS transitions.
 const floatingEntrance = {
-  durationMs: 150,
+  openMs: 200,
+  closeMs: 150,
   ease: "cubic-bezier(0.22, 1, 0.36, 1)",
-  initial: { opacity: 0, scale: "0.97" },
+  initial: { opacity: 0, scale: "0.97", filter: "blur(4px)" },
+  close: { opacity: 0, filter: "blur(4px)", transitionTimingFunction: "ease-in" },
+  closeShiftPx: 12,
   reducedInitial: { opacity: 0 },
 } as const;
 
@@ -144,6 +148,17 @@ const pitchLineKeyframes: Record<"wipe" | "reducedWipe" | "fadeOut", Keyframe[]>
   reducedWipe: [{ opacity: 0 }, { opacity: 1 }],
   fadeOut: [{ opacity: 1 }, { opacity: 0 }],
 };
+
+// -- Spectrum Zoom ------------------------------------------------------------
+
+const easeOutCubic = (progress: number): number => 1 - (1 - progress) ** 3;
+
+// Sharp tiles fade in over the stretched band on a canvas, so these are plain numbers and a curve.
+const spectrumRefineMotion = {
+  fadeMs: 120,
+  reducedFadeMs: 80,
+  ease: easeOutCubic,
+} as const;
 
 // -- Edit Loupe ---------------------------------------------------------------
 
@@ -177,7 +192,8 @@ export {
   slideUpVariants,
   centeredSlideUpVariants,
   centeredFadeVariants,
-  syncCarouselTransition,
+  syncTapRingTransition,
+  syncTapRingVariants,
   buildGroupPingVariants,
   shimmerTransition,
   shimmerVariants,
@@ -192,4 +208,6 @@ export {
   inlineIconReducedVariants,
   pitchLineKeyframes,
   pitchLineMotion,
+  spectrumRefineMotion,
+  easeOutCubic,
 };

@@ -1,5 +1,6 @@
 import { useAudioStore } from "@/stores/audio";
 import { useProjectStore } from "@/stores/project";
+import { useSettingsStore } from "@/stores/settings";
 import { hiddenByDismissal } from "@/ui/notices/notice-model";
 import { replacedOwnTimingNote, showGroupActionToast, showKeptOwnTimingToast } from "@/utils/group-toast";
 import { type RepeatingSection, findRepeatingStandaloneSections } from "@/views/grouping/repeating-sections";
@@ -10,7 +11,12 @@ function useVisibleGroupingSuggestions(enabled = true) {
   const lines = useProjectStore((s) => s.lines);
   const dismissed = useProjectStore((s) => s.dismissedSuggestions);
 
-  const suggestions = useMemo(() => (enabled ? findRepeatingStandaloneSections(lines) : []), [enabled, lines]);
+  const splitChar = useSettingsStore((s) => s.splitCharacter);
+
+  const suggestions = useMemo(
+    () => (enabled ? findRepeatingStandaloneSections(lines, splitChar) : []),
+    [enabled, lines, splitChar],
+  );
   return useMemo(() => hiddenByDismissal(suggestions, dismissed), [suggestions, dismissed]);
 }
 
