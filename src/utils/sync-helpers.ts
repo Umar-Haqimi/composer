@@ -152,6 +152,7 @@ function createTrackWordsFromTextAt(
 
 export {
   createTrackWordsFromTextAt,
+  DEFAULT_BG_WORD_DURATION,
   createInitialBgWords,
   distributeWordsInLine,
   getNudgeAmount,
