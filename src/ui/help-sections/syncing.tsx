@@ -118,6 +118,15 @@ const SyncSection: React.FC = () => (
       </p>
     </HelpTopic>
 
+    <HelpTopic title="Background vocals">
+      <p className={PROSE}>
+        Sync the lead first, then switch the track toggle at the top to Background, or press{" "}
+        <InlineKeyBadge keys={getEffectiveKeysArray("sync.toggleTrack")} />. The background pass only visits lines with
+        background vocals, and taps and holds time those words without touching the lead. In line mode, hold for the
+        whole phrase and its words spread across the hold.
+      </p>
+    </HelpTopic>
+
     <HelpTopic title="Re-syncing a line">
       <p className={PROSE}>
         Pause, click the word, then play and tap it again. New taps replace the old timing. To see every line with its

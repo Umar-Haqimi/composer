@@ -10,6 +10,7 @@ import { type PlacementSkip, placementSkipTarget } from "@/domain/sync/placement
 import { type SyncGesture, commitGesture } from "@/domain/sync/commit-gesture";
 import { isCursorPastEnd, nextSyncableLineIndex, previousSlot } from "@/domain/sync/cursor";
 import type { WordTiming } from "@/domain/word/timing";
+import { toastEarlyTap, triggerPulse } from "@/hooks/sync-gesture-feedback";
 import { keptSyncReRecording, syncReRecordingAt, useSyncCursor } from "@/hooks/useSyncCursor";
 import { noteGuideSignal } from "@/lib/guide-signals";
 import { requestPlayback } from "@/lib/sync-count-in";
@@ -18,12 +19,11 @@ import { useConfirm } from "@/stores/confirm-store";
 import { useProjectStore } from "@/stores/project";
 import { useSettingsStore } from "@/stores/settings";
 import { showPlacementBlockedToast } from "@/utils/group-toast";
-import { type SyncState, formatTimeMs, splitIntoWords } from "@/utils/sync-helpers";
+import { type SyncState, splitIntoWords } from "@/utils/sync-helpers";
 import { nudgeBgWordBegin, nudgeBgWordEnd, setBgWordBegin, setBgWordEnd } from "@/utils/timing/bg-word-timing";
 import { nudgeLineBegin, setLineBegin } from "@/utils/timing/line-timing";
 import { nudgeWordBegin, nudgeWordEnd, setWordBegin, setWordEnd } from "@/utils/timing/word-timing";
 import { useCallback, useRef } from "react";
-import { toast } from "sonner";
 
 // -- Types --------------------------------------------------------------------
 
@@ -36,23 +36,6 @@ interface UseSyncHandlersProps {
   setShowPulse: (show: boolean) => void;
   setIsPlaying: (playing: boolean) => void;
   onPlacementSkip?: (skip: PlacementSkip, lineIndex: number) => void;
-}
-
-// -- Constants ------------------------------------------------------------------
-
-const EARLY_TAP_TOAST_ID = "sync-early-tap";
-
-// -- Helpers --------------------------------------------------------------------
-
-function toastEarlyTap(clampedTo: number | null): void {
-  if (clampedTo === null) return;
-  toast(`Early tap snapped to ${formatTimeMs(clampedTo)}`, { id: EARLY_TAP_TOAST_ID });
-  noteGuideSignal("sync.earlyTap");
-}
-
-function triggerPulse(setShowPulse: (show: boolean) => void): void {
-  setShowPulse(true);
-  setTimeout(() => setShowPulse(false), 100);
 }
 
 // -- Hook ---------------------------------------------------------------------
