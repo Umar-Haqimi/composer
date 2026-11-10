@@ -5,18 +5,26 @@ import { Button } from "@/ui/button";
 import { InlineKeyBadge } from "@/ui/inline-key-badge";
 import { shimmerTransition, shimmerVariants } from "@/utils/animationVariants";
 import { readToken } from "@/utils/theme/read-token";
-import { IconTimeline } from "@tabler/icons-react";
+import { pluralize } from "@/utils/pluralize";
+import { IconMicrophone2, IconTimeline } from "@tabler/icons-react";
 import { m } from "motion/react";
 
 // -- Interfaces ---------------------------------------------------------------
 
 interface SyncEndScreenProps {
   syncComplete: boolean;
+  background: BackgroundEnd;
+}
+
+interface BackgroundEnd {
+  passComplete: boolean;
+  lineCount: number;
+  onStart: () => void;
 }
 
 // -- Components ---------------------------------------------------------------
 
-const SyncCompleteMessage: React.FC = () => {
+const SyncCompleteMessage: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => {
   const shimmerBase = readToken("accent-text");
   const shimmerHighlight = readToken("text");
   const completeGradient = `linear-gradient(45deg, ${shimmerBase} 0%, ${shimmerBase} 40%, ${shimmerHighlight} 50%, ${shimmerBase} 60%, ${shimmerBase} 100%)`;
@@ -37,12 +45,9 @@ const SyncCompleteMessage: React.FC = () => {
           color: "transparent",
         }}
       >
-        Sync complete!
+        {title}
       </m.div>
-      <div className="text-composer-text-muted">
-        Every line has its timing. Open the Timeline to nudge anything that feels off.
-      </div>
-      <OpenTimelineButton />
+      {children}
     </div>
   );
 };
@@ -53,7 +58,7 @@ const OpenTimelineButton: React.FC = () => {
     <Button
       hasIcon
       size="lg"
-      className={showShortcutHints ? "mt-5 pr-2.5 [&>[data-inline-key-badge]]:ml-0" : "mt-5"}
+      className={showShortcutHints ? "pr-2.5 [&>[data-inline-key-badge]]:ml-0" : undefined}
       onClick={() => useProjectStore.getState().setActiveTab("timeline")}
     >
       <IconTimeline className="size-4" />
@@ -63,10 +68,49 @@ const OpenTimelineButton: React.FC = () => {
   );
 };
 
-const SyncEndScreen: React.FC<SyncEndScreenProps> = ({ syncComplete }) => (
+// Finishing the lead is when background vocals become worth syncing, so the end screen offers the second pass.
+const LeadCompleteMessage: React.FC<{ background: BackgroundEnd }> = ({ background }) => (
+  <SyncCompleteMessage title="Sync complete!">
+    {background.lineCount > 0 ? (
+      <>
+        <div className="text-composer-text-muted">
+          Every lead line has its timing. {pluralize(background.lineCount, "line has", "lines have")} background vocals
+          to sync next.
+        </div>
+        <div className="mt-5 flex justify-center gap-3">
+          <Button hasIcon size="lg" variant="primary" onClick={background.onStart}>
+            <IconMicrophone2 className="size-4" />
+            Sync background vocals
+          </Button>
+          <OpenTimelineButton />
+        </div>
+      </>
+    ) : (
+      <>
+        <div className="text-composer-text-muted">
+          Every line has its timing. Open the Timeline to nudge anything that feels off.
+        </div>
+        <div className="mt-5">
+          <OpenTimelineButton />
+        </div>
+      </>
+    )}
+  </SyncCompleteMessage>
+);
+
+const SyncEndScreen: React.FC<SyncEndScreenProps> = ({ syncComplete, background }) => (
   <div className="flex flex-col items-center justify-center flex-1 px-12 py-12">
-    {syncComplete ? (
-      <SyncCompleteMessage />
+    {background.passComplete ? (
+      <SyncCompleteMessage title="Background vocals synced!">
+        <div className="text-composer-text-muted">
+          Every background line has its timing. Open the Timeline to nudge anything that feels off.
+        </div>
+        <div className="mt-5">
+          <OpenTimelineButton />
+        </div>
+      </SyncCompleteMessage>
+    ) : syncComplete ? (
+      <LeadCompleteMessage background={background} />
     ) : (
       <div className="text-center">
         <div className="mb-2 text-2xl font-medium text-composer-text">You've reached the end</div>

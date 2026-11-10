@@ -265,6 +265,12 @@ const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     defaultBinding: { key: "e" },
   },
   {
+    id: "sync.toggleTrack",
+    scope: "sync",
+    description: "Switch between lead and background vocals",
+    defaultBinding: { key: "b" },
+  },
+  {
     id: "timeline.toggleFollow",
     scope: "timeline",
     description: "Toggle follow",

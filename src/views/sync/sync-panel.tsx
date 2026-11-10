@@ -2,8 +2,10 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } fro
 import { hasTransliteration } from "@/domain/language/has-transliteration";
 import { playingLineIndex } from "@/domain/line/playing-line";
 import { isProjectFullySynced, syncProgress } from "@/domain/line/sync-progress";
+import type { SyncTrack } from "@/domain/sync/background-pass";
 import { previousSlot, slotBounds } from "@/domain/sync/cursor";
 import { useFrameLoop } from "@/hooks/use-frame-loop";
+import { useBackgroundSyncHandlers } from "@/hooks/useBackgroundSyncHandlers";
 import { useSyncHandlers } from "@/hooks/useSyncHandlers";
 import { noteGuideSignal } from "@/lib/guide-signals";
 import { cancelCountIn, isCountingIn } from "@/lib/sync-count-in";
@@ -63,6 +65,7 @@ const SyncPanel: React.FC = () => {
   });
   const [showPulse, setShowPulse] = useState(false);
   const editMode = useSyncEditModeStore((s) => s.editMode);
+  const [track, setTrack] = useState<SyncTrack>("lead");
   const [isHolding, setIsHolding] = useState(false);
   const [rippleTarget, setRippleTarget] = useState<RippleTarget | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -79,6 +82,16 @@ const SyncPanel: React.FC = () => {
     setIsPlaying,
     onPlacementSkip: placementPreroll.show,
   });
+  const backgroundHandlers = useBackgroundSyncHandlers({
+    lines,
+    granularity,
+    editMode,
+    setSyncState,
+    setShowPulse,
+    setIsPlaying,
+  });
+  const onBackground = track === "background";
+  const activeHandlers = onBackground ? { ...syncHandlers, ...backgroundHandlers } : syncHandlers;
   const {
     handleTap,
     handleHoldStart,
@@ -91,36 +104,23 @@ const SyncPanel: React.FC = () => {
     isComplete,
     currentWord,
     skippedInstances,
-  } = syncHandlers;
+  } = activeHandlers;
   const countIn = useSyncCountIn();
 
   const { skippedLineIds, skippedByLastLineId, groupTags, folded, placingName } = useSharedSyncView(
     lines,
     groups,
-    cursor,
+    syncHandlers.cursor,
     skippedInstances,
   );
   const showLineList = (!isPlaying && !countIn.countingIn) || editMode;
   const showsLane = !showLineList && !isComplete;
+  const backgroundPass = onBackground ? backgroundHandlers.pass : undefined;
   // biome-ignore lint/correctness/useExhaustiveDependencies: buildLaneRows splits words by the split character
   const laneRows = useMemo(
-    () => (showsLane ? buildLaneRows({ lines, displayLines, agents, groupTags, folded }) : []),
-    [showsLane, lines, displayLines, agents, groupTags, folded, splitCharacter],
+    () => (showsLane ? buildLaneRows({ lines, displayLines, agents, groupTags, folded, backgroundPass }) : []),
+    [showsLane, lines, displayLines, agents, groupTags, folded, backgroundPass, splitCharacter],
   );
-
-  const stopSessionAtSongEnd = useEffectEvent(() => {
-    setSyncState((prev) => ({ ...prev, isActive: false }));
-    const slot = previousSlot(lines, cursor, granularity);
-    const bounds = slot ? slotBounds(lines, slot) : null;
-    if (bounds) seekTo(Math.max(0, bounds.begin - useSettingsStore.getState().redoPreroll));
-  });
-
-  useEffect(() => {
-    if (!audioElement) return;
-    const handleEnded = () => stopSessionAtSongEnd();
-    audioElement.addEventListener("ended", handleEnded);
-    return () => audioElement.removeEventListener("ended", handleEnded);
-  }, [audioElement]);
 
   const triggerRippleAtCurrentPosition = useCallback(() => {
     const { lineIndex: committedLineIndex, wordIndex: committedWordIndex } = cursor;
@@ -171,7 +171,8 @@ const SyncPanel: React.FC = () => {
     editMode,
   );
 
-  const progress = useMemo(() => syncProgress(lines, granularity), [lines, granularity]);
+  const leadProgress = useMemo(() => syncProgress(lines, granularity), [lines, granularity]);
+  const progress = onBackground ? backgroundHandlers.progress : leadProgress;
   const syncComplete = useMemo(() => isProjectFullySynced(lines), [lines]);
 
   const handleGranularityChange = useCallback(
@@ -201,10 +202,44 @@ const SyncPanel: React.FC = () => {
   const { lineIndex, wordIndex } = cursor;
   const noteSyncUndo = useEffectEvent(() => noteGuideSignal("sync.undoTap", lines[lineIndex]?.id));
 
-  const lastSyncedTime = useMemo(() => {
-    const slot = previousSlot(lines, cursor, granularity);
+  const leadLastSyncedTime = useMemo(() => {
+    const slot = previousSlot(lines, syncHandlers.cursor, granularity);
     return slot ? slotBounds(lines, slot)?.begin : undefined;
-  }, [lines, cursor, granularity]);
+  }, [lines, syncHandlers.cursor, granularity]);
+  const lastSyncedTime = onBackground ? backgroundHandlers.lastSyncedTime : leadLastSyncedTime;
+
+  const stopSessionAtSongEnd = useEffectEvent(() => {
+    setSyncState((prev) => ({ ...prev, isActive: false }));
+    if (lastSyncedTime !== undefined) seekTo(Math.max(0, lastSyncedTime - useSettingsStore.getState().redoPreroll));
+  });
+
+  useEffect(() => {
+    if (!audioElement) return;
+    const handleEnded = () => stopSessionAtSongEnd();
+    audioElement.addEventListener("ended", handleEnded);
+    return () => audioElement.removeEventListener("ended", handleEnded);
+  }, [audioElement]);
+
+  // A track switch ends the session, so the next tap starts the other pass from its own cursor.
+  const handleTrackChange = useCallback(
+    (next: SyncTrack) => {
+      if (next === track || isHolding) return;
+      cancelCountIn();
+      setIsPlaying(false);
+      setSyncState((prev) => ({ ...prev, isActive: false }));
+      setTrack(next);
+    },
+    [track, isHolding, setIsPlaying],
+  );
+  const canSyncBackground = onBackground || backgroundHandlers.pass.length > 0;
+  const toggleTrackFromKeyboard = useEffectEvent(() => {
+    if (canSyncBackground) handleTrackChange(onBackground ? "lead" : "background");
+  });
+
+  const startBackgroundPass = useCallback(() => {
+    setTrack("background");
+    backgroundHandlers.handleStartSync();
+  }, [backgroundHandlers.handleStartSync]);
 
   const performTap = useCallback(() => {
     if (editMode || isCountingIn()) return;
@@ -349,6 +384,11 @@ const SyncPanel: React.FC = () => {
         e.preventDefault();
         toggleEditFromKeyboard();
         break;
+      case "sync.toggleTrack":
+        if (isTypingTarget(e.target)) return;
+        e.preventDefault();
+        toggleTrackFromKeyboard();
+        break;
     }
   });
 
@@ -408,6 +448,8 @@ const SyncPanel: React.FC = () => {
         hasTransliteration={linesHaveTransliteration}
         toggleTextVariant={toggleReadingText}
         granularity={granularity}
+        track={track}
+        handleTrackChange={canSyncBackground ? handleTrackChange : undefined}
         handleGranularityChange={handleGranularityChange}
         editMode={editMode}
         handleToggleEdit={handleToggleEdit}
@@ -429,12 +471,19 @@ const SyncPanel: React.FC = () => {
           isComplete={isComplete}
           skippedLineIds={skippedLineIds}
           skippedByLastLineId={skippedByLastLineId}
-          handlers={syncHandlers}
+          handlers={activeHandlers}
           scrollContainerRef={scrollContainerRef}
           splitCharacter={splitCharacter}
         />
       ) : isComplete ? (
-        <SyncEndScreen syncComplete={syncComplete} />
+        <SyncEndScreen
+          syncComplete={syncComplete}
+          background={{
+            passComplete: onBackground && isComplete,
+            lineCount: backgroundHandlers.pass.length,
+            onStart: startBackgroundPass,
+          }}
+        />
       ) : (
         <SyncLane
           rows={laneRows}
@@ -442,7 +491,7 @@ const SyncPanel: React.FC = () => {
           wordIndex={wordIndex}
           granularity={granularity}
           isHolding={isHolding}
-          placingLineIndex={placingName !== null ? lineIndex : null}
+          placingLineIndex={!onBackground && placingName !== null ? lineIndex : null}
           ring={rippleTarget}
           onRingDone={clearRippleTarget}
           aboveCurrent={countIn.dots}
@@ -463,7 +512,13 @@ const SyncPanel: React.FC = () => {
           showGestureCircles && (
             <SyncGestureControls
               currentWord={currentWord}
-              displayWord={placingName ?? displayLines[lineIndex]?.wordTexts?.[wordIndex]}
+              displayWord={
+                onBackground
+                  ? granularity === "word"
+                    ? laneRows[lineIndex]?.wordTexts[wordIndex]
+                    : undefined
+                  : (placingName ?? displayLines[lineIndex]?.wordTexts?.[wordIndex])
+              }
               isHolding={isHolding}
               handleHoldPointerDown={handleHoldPointerDown}
               handleHoldPointerRelease={handleHoldPointerRelease}

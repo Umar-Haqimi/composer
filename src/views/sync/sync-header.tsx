@@ -1,4 +1,5 @@
 import type { LanguageTextVariant } from "@/domain/language/display";
+import type { SyncTrack } from "@/domain/sync/background-pass";
 import { useSettingsStore } from "@/stores/settings";
 import { getEffectiveKeysArray } from "@/stores/shortcut-bindings";
 import { Button } from "@/ui/button";
@@ -16,6 +17,8 @@ interface SyncHeaderProps {
   hasTransliteration: boolean;
   toggleTextVariant: () => void;
   granularity: "line" | "word";
+  track: SyncTrack;
+  handleTrackChange?: (track: SyncTrack) => void;
   handleGranularityChange: (granularity: "line" | "word") => void;
   editMode: boolean;
   handleToggleEdit: () => void;
@@ -31,6 +34,11 @@ const GRANULARITY_OPTIONS = [
   { value: "word", label: "Word" },
 ] as const;
 
+const TRACK_OPTIONS = [
+  { value: "lead", label: "Lead" },
+  { value: "background", label: "Background" },
+] as const;
+
 // -- Components ---------------------------------------------------------------
 
 const SyncHeader: React.FC<SyncHeaderProps> = ({
@@ -39,6 +47,8 @@ const SyncHeader: React.FC<SyncHeaderProps> = ({
   hasTransliteration,
   toggleTextVariant,
   granularity,
+  track,
+  handleTrackChange,
   handleGranularityChange,
   editMode,
   handleToggleEdit,
@@ -52,6 +62,7 @@ const SyncHeader: React.FC<SyncHeaderProps> = ({
       <h2 className="sr-only">Sync</h2>
       <span className="flex items-baseline gap-1.5 text-[13px] text-(--muted) tabular-nums select-none">
         <b className="font-mono text-[15px] font-bold text-composer-text">{progress.done}</b> / {progress.total}{" "}
+        {track === "background" && "background "}
         {granularity === "word" ? "words" : "lines"} synced
       </span>
       <div className="flex items-center gap-3">
@@ -68,6 +79,14 @@ const SyncHeader: React.FC<SyncHeaderProps> = ({
             <IconLanguage />
           </ShortcutToggleButton>
         </div>
+        {handleTrackChange && (
+          <SegmentedControl
+            aria-label="Vocal track"
+            value={track}
+            options={TRACK_OPTIONS}
+            onChange={handleTrackChange}
+          />
+        )}
         <SegmentedControl
           aria-label="Timing granularity"
           value={granularity}
@@ -90,7 +109,7 @@ const SyncHeader: React.FC<SyncHeaderProps> = ({
         {isActive && !editMode && (
           <Button hasIcon size="lg" onClick={handleReset}>
             <IconRefresh className="size-4" />
-            Reset
+            {track === "background" ? "Restart" : "Reset"}
           </Button>
         )}
         {!isActive && !editMode && (
