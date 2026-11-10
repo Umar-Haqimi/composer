@@ -10,6 +10,7 @@ type SettingsSectionId =
   | "theme"
   | "shortcuts"
   | "confirmations"
+  | "unison"
   | "lyrics"
   | "playback"
   | "sync"
@@ -29,6 +30,7 @@ interface SettingsSection {
 
 type SettingsGroupId =
   | "Library"
+  | "Projects"
   | "Reset"
   | "Lyrics"
   | "Groups"
@@ -72,6 +74,7 @@ const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { id: "theme", label: "Theme" },
   { id: "shortcuts", label: "Shortcuts" },
   { id: "confirmations", label: "Confirmations" },
+  { id: "unison", label: "Unison" },
   { id: "lyrics", label: "Lyrics", heading: "Editing" },
   { id: "playback", label: "Playback" },
   { id: "sync", label: "Sync & Timing" },

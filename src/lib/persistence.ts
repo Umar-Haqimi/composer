@@ -1,13 +1,14 @@
-import type { AlignedTimings } from "@/domain/alignment/fingerprint";
 import type { Stem } from "@/audio/separation/types";
 import type { Agent } from "@/domain/agent/model";
+import type { AlignedTimings } from "@/domain/alignment/fingerprint";
+import type { PlayedRange } from "@/domain/alignment/played-ranges";
 import type { LinkGroup } from "@/domain/group/template";
 import type { LyricLine } from "@/domain/line/model";
 import type { SavedAudioSource } from "@/domain/project/audio-source";
 import type { MetadataKey } from "@/domain/project/imported-metadata";
 import type { ProjectMetadata } from "@/domain/project/metadata";
-import type { TimingGranularity } from "@/domain/project/timing-granularity";
 import type { SyllableSplitDefaults } from "@/domain/project/syllable-split-defaults";
+import type { TimingGranularity } from "@/domain/project/timing-granularity";
 import type { SnapPoint } from "@/domain/snap-point/model";
 import type { BeatGrid } from "@/domain/tempo/beat-grid";
 import { ensureOpenProjectId, findOpenProjectId } from "@/lib/open-project-session";
@@ -42,13 +43,22 @@ interface ProjectSaveInput {
   ttmlEditState: TtmlEditState;
   alignedTimings: AlignedTimings;
   alignmentNoticeDismissed: boolean;
+  unisonLyricId: string | null;
+  playedRanges: PlayedRange[];
 }
 
 // -- Records ------------------------------------------------------------------
 
 function buildSavedProject(input: ProjectSaveInput): SavedProject {
+  const { unisonLyricId, ...fields } = input;
   const audioFileName = input.audioSource?.kind === "file" ? input.audioSource.name : undefined;
-  return { version: SAVED_PROJECT_VERSION, savedAt: Date.now(), ...input, audioFileName };
+  return {
+    version: SAVED_PROJECT_VERSION,
+    savedAt: Date.now(),
+    ...fields,
+    audioFileName,
+    ...(unisonLyricId ? { unisonLyricId } : {}),
+  };
 }
 
 async function saveProjectTo(target: Promise<string>, input: ProjectSaveInput, view?: IndexViewFields): Promise<void> {
@@ -75,5 +85,5 @@ async function clearAudioFile(): Promise<void> {
 
 // -- Exports ------------------------------------------------------------------
 
-export { buildSavedProject, saveProjectTo, saveCurrentProject, saveAudioFile, clearAudioFile };
 export type { ProjectSaveInput };
+export { buildSavedProject, clearAudioFile, saveAudioFile, saveCurrentProject, saveProjectTo };

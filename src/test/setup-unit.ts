@@ -1,3 +1,4 @@
+import "./setup-storage";
 import { beforeEach } from "vitest";
 import { resetMusicBrainzQueue } from "@/lib/musicbrainz-client";
 import { __resetPersistenceSettledForTests } from "@/lib/persistence-settled";

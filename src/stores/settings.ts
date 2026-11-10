@@ -1,3 +1,5 @@
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import { RECOMMENDED_ALIGNMENT_MODEL } from "@/audio/alignment/hubertfa/model-manifest";
 import type { MusicBrainzLookup } from "@/domain/musicbrainz/lookup-mode";
 import { DEFAULT_PITCH_LINE_MODE, type PitchLineMode } from "@/domain/pitch/pitch-line-mode";
@@ -6,21 +8,25 @@ import type { LaunchScreen, LibraryView } from "@/domain/project/library-prefere
 import { SPECTRUM_SETTING_DEFAULTS, type SpectrumSettings } from "@/domain/spectrum/settings";
 import type { KeepYouTubeAudio } from "@/domain/storage/audio-retention";
 import type { StorageLimit } from "@/domain/storage/storage-limit";
-import { DEFAULT_COBALT_INSTANCE_ID, cobaltActions } from "@/stores/settings-cobalt";
+import {
+  type CobaltInstance,
+  type CobaltInstanceStatus,
+  cobaltActions,
+  DEFAULT_COBALT_INSTANCE_ID,
+} from "@/stores/settings-cobalt";
 import {
   LLM_PROFILES_DEFAULTS,
   type LlmProfilesActions,
   type LlmProfilesState,
   llmProfilesActions,
 } from "@/stores/settings-llm-profiles";
-import { SETTINGS_PERSIST_VERSION, migrateSettings } from "@/stores/settings-migration";
+import { migrateSettings, SETTINGS_PERSIST_VERSION } from "@/stores/settings-migration";
 import { SNAP_DEFAULTS, type SnapSettings } from "@/stores/settings-snap";
 import { SYNC_TAP_DEFAULTS, type SyncTapSettings } from "@/stores/settings-sync-taps";
+import { UNISON_SETTING_DEFAULTS, type UnisonSettings } from "@/stores/settings-unison";
 import { DEFAULT_BRIDGE_URL } from "@/utils/composer-bridge-url";
 import { PREVIEW_SIDEBAR_WIDTH } from "@/utils/preview-sidebar-width";
 import { DEFAULT_MIN_WORD_DURATION } from "@/utils/word-spaces";
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
 
 // -- Types --------------------------------------------------------------------
 
@@ -36,19 +42,7 @@ interface ExperimentFlags {
   youtubeBridge: boolean;
 }
 
-interface CobaltInstance {
-  id: string;
-  label: string;
-  url: string;
-}
-
-interface CobaltInstanceStatus {
-  status: "success" | "error";
-  errorMessage?: string;
-  at: number;
-}
-
-interface SettingsState extends LlmProfilesState, SnapSettings, SpectrumSettings, SyncTapSettings {
+interface SettingsState extends LlmProfilesState, SnapSettings, SpectrumSettings, SyncTapSettings, UnisonSettings {
   pitchLine: PitchLineMode;
   defaultPlaybackRate: number;
   rememberPlaybackRate: boolean;
@@ -141,6 +135,7 @@ const DEFAULTS: SettingsState = {
   ...SPECTRUM_SETTING_DEFAULTS,
   pitchLine: DEFAULT_PITCH_LINE_MODE,
   ...SNAP_DEFAULTS,
+  ...UNISON_SETTING_DEFAULTS,
   defaultPlaybackRate: 0.75,
   rememberPlaybackRate: true,
   lastPlaybackRate: 0.75,
@@ -274,12 +269,12 @@ function isUsingDefaultCobaltInstance(): boolean {
 
 // -- Exports ------------------------------------------------------------------
 
+export type { BooleanSettingKey, CobaltInstanceStatus, SettingsState, VocalModelVariant };
 export {
-  useSettingsStore,
-  DEFAULTS,
   BUILTIN_COBALT_INSTANCE,
   DEFAULT_COBALT_INSTANCE_ID,
+  DEFAULTS,
   getActiveCobaltInstance,
   isUsingDefaultCobaltInstance,
+  useSettingsStore,
 };
-export type { BooleanSettingKey, SettingsState, CobaltInstanceStatus, VocalModelVariant };

@@ -11,6 +11,7 @@ import { STORAGE_CATALOG_ENTRIES } from "@/stores/settings-catalog-entries-stora
 import { SYNC_CATALOG_ENTRIES } from "@/stores/settings-catalog-entries-sync";
 import { TIMELINE_CATALOG_ENTRIES } from "@/stores/settings-catalog-entries-timeline";
 import { TRANSLATION_CATALOG_ENTRIES } from "@/stores/settings-catalog-entries-translation";
+import { UNISON_CATALOG_ENTRIES } from "@/stores/settings-catalog-entries-unison";
 
 // -- Catalog ------------------------------------------------------------------
 
@@ -29,6 +30,7 @@ const SETTINGS_CATALOG = {
     keywords: ["preset", "layout", "space", "enter", "amll", "osu", "remastered", "import", "code", "share"],
   },
   ...CONFIRMATIONS_CATALOG_ENTRIES,
+  ...UNISON_CATALOG_ENTRIES,
   ...LYRICS_CATALOG_ENTRIES,
   ...PLAYBACK_CATALOG_ENTRIES,
   ...SYNC_CATALOG_ENTRIES,

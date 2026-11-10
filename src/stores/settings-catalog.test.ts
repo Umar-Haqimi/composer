@@ -210,6 +210,7 @@ describe("SETTINGS_SECTIONS", () => {
       ["theme", undefined],
       ["shortcuts", undefined],
       ["confirmations", undefined],
+      ["unison", undefined],
       ["lyrics", "Editing"],
       ["playback", undefined],
       ["sync", undefined],

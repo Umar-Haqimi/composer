@@ -1,10 +1,26 @@
-import type { CobaltInstanceStatus, SettingsState } from "@/stores/settings";
+// -- Types --------------------------------------------------------------------
+
+interface CobaltInstance {
+  id: string;
+  label: string;
+  url: string;
+}
+
+interface CobaltInstanceStatus {
+  status: "success" | "error";
+  errorMessage?: string;
+  at: number;
+}
 
 const DEFAULT_COBALT_INSTANCE_ID = "default";
 
-// -- Types --------------------------------------------------------------------
+interface CobaltState {
+  cobaltInstances: CobaltInstance[];
+  selectedCobaltInstanceId: string;
+  cobaltInstanceStatus: Record<string, CobaltInstanceStatus>;
+}
 
-type SetCobalt = (partial: Partial<SettingsState> | ((state: SettingsState) => Partial<SettingsState>)) => void;
+type SetCobalt = (partial: Partial<CobaltState> | ((state: CobaltState) => Partial<CobaltState>)) => void;
 
 interface CobaltActions {
   addCobaltInstance: (instance: { label: string; url: string }) => void;
@@ -50,5 +66,5 @@ function cobaltActions(set: SetCobalt): CobaltActions {
 
 // -- Exports ------------------------------------------------------------------
 
-export type { CobaltActions };
+export type { CobaltActions, CobaltInstance, CobaltInstanceStatus };
 export { cobaltActions, DEFAULT_COBALT_INSTANCE_ID };
