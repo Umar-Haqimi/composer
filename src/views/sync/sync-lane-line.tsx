@@ -127,6 +127,11 @@ const SyncLaneLine: React.FC<SyncLaneLineProps> = memo(({ granularity, aboveCurr
         {isCurrent && aboveCurrent && (
           <span className="absolute inset-x-0 bottom-full flex justify-center pb-2">{aboveCurrent}</span>
         )}
+        {row.leadText && (
+          <span className="relative text-xl font-medium text-composer-text-faint">
+            {stripSplitCharacter(row.leadText)}
+          </span>
+        )}
         <div
           className={cn(
             "relative flex flex-wrap justify-center gap-x-4 text-4xl font-semibold tracking-[-0.012em] leading-[1.1]",

@@ -5,7 +5,7 @@ import { getShortcutDescription } from "@/stores/shortcut-bindings";
 import { createAudioFile } from "@/test/audio-fixtures";
 import { createLine, createWord } from "@/test/factories";
 import { render } from "@/test/render";
-import { firstBegin, tapAt } from "@/test/shared-timing-sync";
+import { firstBegin, tapAt, undo } from "@/test/shared-timing-sync";
 import { firePointer, loadPlayingProject, setCurrentTime, setIsPlaying } from "@/test/sync-gesture-helpers";
 import { SyncPanel } from "@/views/sync/sync-panel";
 import { useTimelineStore } from "@/views/timeline/timeline-store";
@@ -388,5 +388,37 @@ describe("bg-init derivation", () => {
     useProjectStore.getState().undo();
     await new Promise((r) => setTimeout(r, 30));
     expect(useProjectStore.getState().lines[0].text).toBe("a");
+  });
+});
+
+describe("SyncPanel · background pass", () => {
+  it("taps background words without touching the lead, and undo rewinds to the undone word", async () => {
+    useAudioStore.setState({ source: { type: "file", file: createAudioFile() }, duration: 20, currentTime: 0 });
+    useProjectStore.setState({
+      activeTab: "sync",
+      granularity: "word",
+      lines: [
+        createLine({
+          id: "l0",
+          text: "come back",
+          words: [createWord({ text: "come ", begin: 4, end: 5 }), createWord({ text: "back", begin: 5, end: 6 })],
+          backgroundText: "come back",
+        }),
+      ],
+    });
+    const screen = await render(<SyncPanel />);
+    const backgroundBegins = () => useProjectStore.getState().lines[0].backgroundWords?.map((word) => word.begin);
+
+    await screen.getByRole("button", { name: "Background" }).click();
+    await screen.getByRole("button", { name: "Start" }).click();
+    await expect.poll(() => useAudioStore.getState().isPlaying).toBe(true);
+    await tapAt(6, backgroundBegins);
+    await tapAt(6.5, backgroundBegins);
+    expect(backgroundBegins()).toEqual([6, 6.5]);
+    expect(useProjectStore.getState().lines[0].words?.map((word) => word.begin)).toEqual([4, 5]);
+
+    await undo(backgroundBegins);
+    await tapAt(6.8, backgroundBegins);
+    expect(backgroundBegins()).toEqual([6, 6.8]);
   });
 });
