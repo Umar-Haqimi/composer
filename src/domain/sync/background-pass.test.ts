@@ -1,6 +1,7 @@
 import {
   advanceBackgroundCursor,
   backgroundPassLineIndices,
+  backgroundSkipTarget,
   retreatBackgroundCursor,
 } from "@/domain/sync/background-pass";
 import { createGroup, createLine } from "@/test/factories";
@@ -73,5 +74,12 @@ describe("background cursor", () => {
       lineIndex: 2,
       wordIndex: 0,
     });
+  });
+
+  it("skips forward to the next background line's lead start minus pre-roll, never backwards", () => {
+    const next = { lineIndex: 2, wordIndex: 0 };
+    expect(backgroundSkipTarget(lines, next, "word", 1, 1.5)).toBe(2.5);
+    expect(backgroundSkipTarget(lines, next, "word", 3, 1.5)).toBeNull();
+    expect(backgroundSkipTarget(lines, { lineIndex: 0, wordIndex: 1 }, "word", -5, 1.5)).toBeNull();
   });
 });
