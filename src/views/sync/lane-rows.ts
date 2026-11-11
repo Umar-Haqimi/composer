@@ -5,6 +5,7 @@ import type { LanguageDisplayLine } from "@/domain/language/display";
 import type { LyricLine } from "@/domain/line/model";
 import { backgroundSlots } from "@/domain/sync/background-pass";
 import type { WordTiming } from "@/domain/word/timing";
+import { getSplitCharacter } from "@/utils/split-character";
 import { splitIntoWords, splitIntoWordsWithMeta } from "@/utils/sync-helpers";
 import type { LaneGroupTag } from "@/views/sync/shared-sync-tags";
 
@@ -33,6 +34,13 @@ interface LaneRow {
   folded: boolean;
 }
 
+interface LineWords {
+  display: LanguageDisplayLine;
+  splitCharacter: string;
+  wordTexts: string[];
+  wordRuns: WordRun[];
+}
+
 interface LaneRowsInput {
   lines: readonly LyricLine[];
   displayLines: readonly LanguageDisplayLine[];
@@ -43,6 +51,12 @@ interface LaneRowsInput {
 }
 
 type LaneTrackFields = Pick<LaneRow, "text" | "wordTexts" | "wordRuns" | "backgroundText" | "leadText">;
+
+// -- Cache --------------------------------------------------------------------
+
+// A tap replaces one line object, so every other line keeps its split words and its row.
+const wordsByLine = new WeakMap<LyricLine, LineWords>();
+const rowByLine = new WeakMap<LyricLine, LaneRow>();
 
 // -- Functions ----------------------------------------------------------------
 
@@ -77,14 +91,19 @@ function slotRunsOf(slots: readonly WordTiming[]): WordRun[] {
   return runs;
 }
 
-function leadFields(line: LyricLine, display: LanguageDisplayLine): LaneTrackFields {
+function lineWords(line: LyricLine, display: LanguageDisplayLine): LineWords {
+  const splitCharacter = getSplitCharacter();
+  const cached = wordsByLine.get(line);
+  if (cached?.display === display && cached.splitCharacter === splitCharacter) return cached;
   const wordTexts = display.wordTexts ?? splitIntoWords(display.text);
-  return {
-    text: display.text,
-    wordTexts,
-    wordRuns: wordRunsOf(line.text, wordTexts.length),
-    backgroundText: display.backgroundText,
-  };
+  const words = { display, splitCharacter, wordTexts, wordRuns: wordRunsOf(line.text, wordTexts.length) };
+  wordsByLine.set(line, words);
+  return words;
+}
+
+function leadFields(line: LyricLine, display: LanguageDisplayLine): LaneTrackFields {
+  const { wordTexts, wordRuns } = lineWords(line, display);
+  return { text: display.text, wordTexts, wordRuns, backgroundText: display.backgroundText };
 }
 
 // The background pass taps background words, so they take the lead's place and the lead stays as context.
@@ -99,6 +118,25 @@ function backgroundFields(line: LyricLine, display: LanguageDisplayLine): LaneTr
   };
 }
 
+function sameSinger(a: LaneSinger | undefined, b: LaneSinger | undefined): boolean {
+  return a === b || (a !== undefined && b !== undefined && a.name === b.name && a.color === b.color);
+}
+
+function reusedRow(previous: LaneRow | undefined, next: LaneRow): LaneRow {
+  const unchanged =
+    previous !== undefined &&
+    previous.lineIndex === next.lineIndex &&
+    previous.wordTexts === next.wordTexts &&
+    previous.wordRuns === next.wordRuns &&
+    previous.text === next.text &&
+    previous.backgroundText === next.backgroundText &&
+    previous.leadText === next.leadText &&
+    previous.groupTag === next.groupTag &&
+    previous.folded === next.folded &&
+    sameSinger(previous.singer, next.singer);
+  return unchanged ? previous : next;
+}
+
 function buildLaneRows({ lines, displayLines, agents, groupTags, folded, backgroundPass }: LaneRowsInput): LaneRow[] {
   const showsSingers = new Set(lines.map((line) => line.agentId)).size > 1;
   const inPass = backgroundPass && new Set(backgroundPass);
@@ -108,18 +146,20 @@ function buildLaneRows({ lines, displayLines, agents, groupTags, folded, backgro
     const isFolded = inPass ? !inPass.has(lineIndex) : folded.has(line.id);
     const singerChanged = !isFolded && line.agentId !== previousAgentId;
     if (!isFolded) previousAgentId = line.agentId;
-    return {
+    const row = reusedRow(rowByLine.get(line), {
       line,
       lineIndex,
       ...(inPass ? backgroundFields(line, display) : leadFields(line, display)),
       singer: showsSingers && singerChanged ? laneSinger(line.agentId, agents) : undefined,
       groupTag: groupTags.get(line.id),
       folded: isFolded,
-    };
+    });
+    rowByLine.set(line, row);
+    return row;
   });
 }
 
 // -- Exports ------------------------------------------------------------------
 
-export { buildLaneRows };
 export type { LaneRow };
+export { buildLaneRows };
