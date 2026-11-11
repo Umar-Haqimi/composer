@@ -1,12 +1,14 @@
+import { IconFileImport, IconMicrophone } from "@tabler/icons-react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { LinkGroup } from "@/domain/group/template";
-import { backgroundFields, withSeededBackground } from "@/domain/line/background";
 import { detectNonLatinLanguage } from "@/domain/language/script-detection";
-import { hasLyricLines } from "@/domain/project/lyrics-presence";
+import { backgroundFields, withSeededBackground } from "@/domain/line/background";
 import type { LyricLine } from "@/domain/line/model";
-import { LYRICS_FORMATS_PROSE } from "@/domain/lyrics-file/supported-formats";
+import { hasLyricLines } from "@/domain/project/lyrics-presence";
 import { remapWordTextsPreservingTiming } from "@/domain/word/remap-text";
 import type { WordTiming } from "@/domain/word/timing";
 import { useIsActiveTab } from "@/hooks/use-is-active-tab";
+import { useTransportDeckShown } from "@/hooks/use-transport-deck-shown";
 import { useDualClickImport } from "@/hooks/useDualClickImport";
 import { noteGuideSignal } from "@/lib/guide-signals";
 import { useConfirm } from "@/stores/confirm-store";
@@ -14,7 +16,6 @@ import { isAnyModalOpen } from "@/stores/escape-layer-stack";
 import { useImportModal, useImportModalStore, useLastImportResult } from "@/stores/import-modal-store";
 import { useProjectStore } from "@/stores/project";
 import { useSettingsStore } from "@/stores/settings";
-import { historyShortcutAction } from "@/utils/history-shortcut";
 import { Button } from "@/ui/button";
 import { Tooltip } from "@/ui/tooltip";
 import {
@@ -22,33 +23,30 @@ import {
   extractInlineAcrossLinkedLines,
   lineHasInlineParens,
 } from "@/utils/background-vocal-extraction";
-import { pluralWord, pluralize } from "@/utils/pluralize";
+import { historyShortcutAction } from "@/utils/history-shortcut";
+import { pluralize, pluralWord } from "@/utils/pluralize";
 import { AgentManager } from "@/views/edit/agent-manager";
 import { useCanExtractBackgroundVocals } from "@/views/edit/can-extract-background";
 import { decideEditTextAction } from "@/views/edit/decide-edit-text-action";
 import { detachInstancesFromLines } from "@/views/edit/diff-edit-text";
-import { linesToEditText } from "@/views/edit/edit-text";
 import { EditNotices } from "@/views/edit/edit-notices";
+import { linesToEditText } from "@/views/edit/edit-text";
+import { EditTextInput } from "@/views/edit/edit-text-input";
 import { ImportSuccessBanner } from "@/views/edit/import-success-banner";
 import { LinePreviewList } from "@/views/edit/line-preview-list";
 import { parseLyrics } from "@/views/edit/parse-lyrics";
+import { PreviewSelectionBar } from "@/views/edit/preview-selection-bar";
+import { useCurrentLineNumber } from "@/views/edit/use-current-line-number";
 import { useComposedTextareaChange, useEditTextCaret } from "@/views/edit/use-edit-text-caret";
 import { useFocusLyricsShortcut } from "@/views/edit/use-focus-lyrics-shortcut";
+import { useLinkedScroll } from "@/views/edit/use-linked-scroll";
 import { useSmartPaste } from "@/views/edit/use-smart-paste";
-import { PreviewSelectionBar } from "@/views/edit/preview-selection-bar";
-import { PROJECT_FILE_PROSE } from "@/views/lyrics-import-modal/accepted-files";
 import { useImportContext } from "@/views/lyrics-import-modal/import-lyrics";
 import { importLyricsFile } from "@/views/lyrics-import-modal/import-lyrics-source";
-import { IconFileImport, IconMicrophone } from "@tabler/icons-react";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 // -- Constants ----------------------------------------------------------------
 
 const RUN_DEBOUNCE_MS = 500;
-
-const LYRICS_TEXTAREA_PLACEHOLDER = `Paste your lyrics here, one line at a time...
-
-Or paste or drop a whole lyrics file (${LYRICS_FORMATS_PROSE}) or ${PROJECT_FILE_PROSE} to import it`;
 
 const preventDefaultDragOver = (e: React.DragEvent) => e.preventDefault();
 
@@ -79,6 +77,8 @@ const EditPanel: React.FC = () => {
   const [rawText, setRawText] = useState(() => linesToEditText(lines));
   const { textareaRef, showEditText } = useEditTextCaret(rawText, setRawText);
   useFocusLyricsShortcut(textareaRef, isActive);
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const previewViewportRef = useRef<HTMLDivElement | null>(null);
   const linesSetByUs = useRef<LyricLine[] | null>(null);
   const modalPendingRef = useRef(false);
   const pastedRef = useRef(false);
@@ -102,6 +102,12 @@ const EditPanel: React.FC = () => {
   const defaultAgentId = agents?.[0]?.id ?? "v1";
   const parsed = useMemo(() => parseLyrics(rawText, lines, defaultAgentId), [rawText, lines, defaultAgentId]);
   const nonEmptyCount = useMemo(() => parsed.filter((p) => !p.isEmpty).length, [parsed]);
+  const hasPlayhead = useTransportDeckShown();
+  const currentLineNumber = useCurrentLineNumber(lines, parsed, hasPlayhead);
+  const { onTextareaScroll, onPreviewScroll } = useLinkedScroll(
+    { textareaRef, backdropRef, previewViewportRef },
+    currentLineNumber,
+  );
 
   const extractOptions = useMemo(
     () => ({
@@ -468,32 +474,21 @@ const EditPanel: React.FC = () => {
         )}
 
         <div className="flex flex-1 min-h-0 gap-4">
-          {/* Input */}
-          <div className="flex flex-col flex-1 min-w-0">
-            <label
-              htmlFor={textareaId}
-              className="flex items-center self-start h-7 mb-2 text-[13px] font-medium select-none text-(--label)"
-            >
-              Paste or type lyrics
-            </label>
-            {/* react-doctor-disable-next-line react-doctor/control-has-associated-label */}
-            <textarea
-              id={textareaId}
-              ref={textareaRef}
-              value={rawText}
-              onChange={textareaChange.onChange}
-              onFocus={() => setIsTypingLyrics(true)}
-              onBlur={handleTextareaBlur}
-              onCompositionStart={textareaChange.onCompositionStart}
-              onCompositionEnd={textareaChange.onCompositionEnd}
-              onPaste={handlePaste}
-              placeholder={LYRICS_TEXTAREA_PLACEHOLDER}
-              className="flex-1 py-2 px-3.5 text-sm font-medium leading-7 border rounded-xl resize-none bg-(--well) border-(--edge) caret-composer-accent focus:outline-none focus:border-(--lit-ring) placeholder:text-(--muted)"
-              spellCheck={false}
-            />
-          </div>
+          <EditTextInput
+            textareaId={textareaId}
+            textareaRef={textareaRef}
+            backdropRef={backdropRef}
+            rawText={rawText}
+            currentLineNumber={currentLineNumber}
+            onChange={textareaChange.onChange}
+            onFocus={() => setIsTypingLyrics(true)}
+            onBlur={handleTextareaBlur}
+            onCompositionStart={textareaChange.onCompositionStart}
+            onCompositionEnd={textareaChange.onCompositionEnd}
+            onPaste={handlePaste}
+            onScroll={onTextareaScroll}
+          />
 
-          {/* Preview */}
           <div className="flex flex-col flex-1 min-w-0">
             <PreviewSelectionBar
               selectedCount={selectedLines.size}
@@ -506,6 +501,9 @@ const EditPanel: React.FC = () => {
               groups={groups}
               agents={agents}
               selectedLines={selectedLines}
+              currentLineNumber={currentLineNumber}
+              viewportRef={previewViewportRef}
+              onScrollTopChange={onPreviewScroll}
               onSelect={handleLineSelect}
               onAgentChange={handleAgentChange}
               onBulkAgentChange={handleBulkAgentChange}
