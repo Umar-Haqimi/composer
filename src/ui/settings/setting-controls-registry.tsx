@@ -176,6 +176,7 @@ const SETTING_CONTROLS: Record<SettingId, SettingControl> = {
   nudgeAmount: { kind: "slider", min: 0.01, max: 0.2, step: 0.01, format: asMilliseconds },
   defaultWordDuration: { kind: "slider", min: 0.1, max: 1, step: 0.05, format: asMilliseconds },
   minWordDuration: { kind: "slider", min: 0.01, max: 0.2, step: 0.01, format: asMilliseconds },
+  skipToNextBackgroundLine: TOGGLE,
   redoPreroll: { kind: "slider", min: 0, max: 5, step: 0.1, format: asMilliseconds },
   seekStep: { kind: "slider", min: 0.1, max: 5, step: 0.1, format: (v) => `${v.toFixed(1)}s` },
   fineSeekStep: { kind: "slider", min: 0.01, max: 0.5, step: 0.01, format: asMilliseconds },

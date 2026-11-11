@@ -6,6 +6,7 @@ import { type BackgroundGesture, commitBackgroundGesture } from "@/domain/sync/b
 import {
   backgroundPassProgress,
   backgroundResumeTime,
+  backgroundSkipTarget,
   backgroundSlots,
   firstBackgroundCursor,
   isBackgroundPassComplete,
@@ -56,16 +57,24 @@ function useBackgroundSyncHandlers({
 
   const runGesture = useCallback(
     (gesture: BackgroundGesture): boolean => {
-      const commit = commitBackgroundGesture(lines, gesture, { cursor, time: livePlaybackTime(), granularity, pass });
+      const time = livePlaybackTime();
+      const commit = commitBackgroundGesture(lines, gesture, { cursor, time, granularity, pass });
       if (!commit) return false;
       const before = useProjectStore.getState();
       updateLinesWithHistory(commit.lineUpdates, TIMING_WRITE);
-      if (useProjectStore.getState().lines === before.lines) return false;
+      const after = useProjectStore.getState().lines;
+      if (after === before.lines) return false;
       recordCommit(cursor, before.history[before.historyIndex], commit.nextCursor);
       toastEarlyTap(commit.clampedTo);
+      const { skipToNextBackgroundLine, redoPreroll } = useSettingsStore.getState();
+      const finishedLine = commit.nextCursor.lineIndex !== cursor.lineIndex;
+      if (skipToNextBackgroundLine && finishedLine && !editMode && useAudioStore.getState().isPlaying) {
+        const target = backgroundSkipTarget(after, commit.nextCursor, granularity, time, redoPreroll);
+        if (target !== null) seekTo(target);
+      }
       return true;
     },
-    [lines, cursor, granularity, pass, updateLinesWithHistory, recordCommit],
+    [lines, cursor, granularity, pass, editMode, seekTo, updateLinesWithHistory, recordCommit],
   );
 
   const handleTap = useCallback(() => {

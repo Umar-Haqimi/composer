@@ -36,6 +36,14 @@ const SYNC_CATALOG_ENTRIES = {
       "How far before the target line or word Sync starts playback after a jump, such as when you re-record a line or word, or when Sync skips past a repeat that already shares its timing.",
     settingKey: "redoPreroll",
   },
+  skipToNextBackgroundLine: {
+    section: "sync",
+    label: "Skip to the next background line",
+    description:
+      "After you finish a background line in Sync, playback jumps ahead to the next line with background vocals, with the re-record pre-roll before it.",
+    keywords: ["background vocals", "bg", "seek", "auto skip"],
+    settingKey: "skipToNextBackgroundLine",
+  },
   syncCountIn: {
     section: "sync",
     label: "Count-in",

@@ -152,6 +152,22 @@ function backgroundResumeTime(
   return line ? (mainBounds(line)?.begin ?? null) : null;
 }
 
+// Lines without background vocals have nothing to tap, so a finished line jumps
+// ahead to the next one. Only forward: a close next line keeps playing through.
+function backgroundSkipTarget(
+  lines: readonly LyricLine[],
+  next: SyncCursor,
+  granularity: SyncGranularity,
+  tapTime: number,
+  preroll: number,
+): number | null {
+  if (next.wordIndex !== 0) return null;
+  const resume = backgroundResumeTime(lines, next, granularity);
+  if (resume === null) return null;
+  const seekTo = resume - preroll;
+  return seekTo > tapTime ? seekTo : null;
+}
+
 function backgroundPassProgress(
   lines: readonly LyricLine[],
   pass: readonly number[],
@@ -176,6 +192,7 @@ export {
   backgroundPassLineIndices,
   backgroundPassProgress,
   backgroundResumeTime,
+  backgroundSkipTarget,
   backgroundSlots,
   clampBackgroundCursor,
   firstBackgroundCursor,

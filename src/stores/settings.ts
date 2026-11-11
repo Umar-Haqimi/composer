@@ -59,6 +59,7 @@ interface SettingsState extends SnapSettings, SpectrumSettings, UnisonSettings {
   defaultWordDuration: number;
   minWordDuration: number;
   redoPreroll: number;
+  skipToNextBackgroundLine: boolean;
   selectionLeadIn: number;
   syncCountIn: number;
   seekStep: number;
@@ -153,6 +154,7 @@ const DEFAULTS: SettingsState = {
   defaultWordDuration: 0.3,
   minWordDuration: DEFAULT_MIN_WORD_DURATION,
   redoPreroll: 1.5,
+  skipToNextBackgroundLine: true,
   selectionLeadIn: 0.3,
   syncCountIn: 3,
   seekStep: 0.5,
