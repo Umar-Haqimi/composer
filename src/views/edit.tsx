@@ -1,13 +1,13 @@
 import type { LinkGroup } from "@/domain/group/template";
-import { instanceCount, instanceOrdinal } from "@/domain/instance/enumerate";
+import { instanceCount } from "@/domain/instance/enumerate";
 import { backgroundFields, withSeededBackground } from "@/domain/line/background";
 import { detectNonLatinLanguage } from "@/domain/language/script-detection";
 import { hasLyricLines } from "@/domain/project/lyrics-presence";
 import type { LyricLine } from "@/domain/line/model";
-import { LYRICS_FORMATS_PROSE } from "@/domain/lyrics-file/supported-formats";
 import { remapWordTextsPreservingTiming } from "@/domain/word/remap-text";
 import type { WordTiming } from "@/domain/word/timing";
 import { useDualClickImport } from "@/hooks/useDualClickImport";
+import { useTransportDeckShown } from "@/hooks/use-transport-deck-shown";
 import { noteGuideSignal } from "@/lib/guide-signals";
 import { useConfirm } from "@/stores/confirm-store";
 import { isAnyModalOpen } from "@/stores/escape-layer-stack";
@@ -26,16 +26,18 @@ import { pluralWord, pluralize } from "@/utils/pluralize";
 import { AgentManager } from "@/views/edit/agent-manager";
 import { decideEditTextAction } from "@/views/edit/decide-edit-text-action";
 import { detachInstancesFromLines } from "@/views/edit/diff-edit-text";
+import { EditPreviewList } from "@/views/edit/edit-preview-list";
 import { linesToEditText } from "@/views/edit/edit-text";
 import { EditNotices } from "@/views/edit/edit-notices";
+import { EditTextInput } from "@/views/edit/edit-text-input";
 import { ImportSuccessBanner } from "@/views/edit/import-success-banner";
-import { LinePreview, PreviewGroupHeader } from "@/views/edit/line-preview";
 import { parseLyrics } from "@/views/edit/parse-lyrics";
+import { useCurrentLineNumber } from "@/views/edit/use-current-line-number";
 import { useComposedTextareaChange, useEditTextCaret } from "@/views/edit/use-edit-text-caret";
 import { useFocusLyricsShortcut } from "@/views/edit/use-focus-lyrics-shortcut";
+import { useLinkedScroll } from "@/views/edit/use-linked-scroll";
 import { useSmartPaste } from "@/views/edit/use-smart-paste";
 import { PreviewSelectionBar } from "@/views/edit/preview-selection-bar";
-import { PROJECT_FILE_PROSE } from "@/views/lyrics-import-modal/accepted-files";
 import { useImportContext } from "@/views/lyrics-import-modal/import-lyrics";
 import { importLyricsFile } from "@/views/lyrics-import-modal/import-lyrics-source";
 import { IconFileImport, IconMicrophone } from "@tabler/icons-react";
@@ -44,10 +46,6 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 // -- Constants ----------------------------------------------------------------
 
 const RUN_DEBOUNCE_MS = 500;
-
-const LYRICS_TEXTAREA_PLACEHOLDER = `Paste your lyrics here, one line at a time...
-
-Or paste or drop a whole lyrics file (${LYRICS_FORMATS_PROSE}) or ${PROJECT_FILE_PROSE} to import it`;
 
 const preventDefaultDragOver = (e: React.DragEvent) => e.preventDefault();
 
@@ -78,6 +76,8 @@ const EditPanel: React.FC = () => {
   const [rawText, setRawText] = useState(() => linesToEditText(lines));
   const { textareaRef, showEditText } = useEditTextCaret(rawText, setRawText);
   useFocusLyricsShortcut(textareaRef, activeTab === "edit");
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const previewViewportRef = useRef<HTMLDivElement | null>(null);
   const linesSetByUs = useRef<LyricLine[] | null>(null);
   const modalPendingRef = useRef(false);
   const pastedRef = useRef(false);
@@ -101,6 +101,12 @@ const EditPanel: React.FC = () => {
   const defaultAgentId = agents?.[0]?.id ?? "v1";
   const parsed = useMemo(() => parseLyrics(rawText, lines, defaultAgentId), [rawText, lines, defaultAgentId]);
   const nonEmptyCount = useMemo(() => parsed.filter((p) => !p.isEmpty).length, [parsed]);
+  const hasPlayhead = useTransportDeckShown();
+  const currentLineNumber = useCurrentLineNumber(lines, parsed, hasPlayhead);
+  const { onTextareaScroll, onPreviewScroll } = useLinkedScroll(
+    { textareaRef, backdropRef, previewViewportRef },
+    currentLineNumber,
+  );
   const instanceCountByGroup = useMemo(
     () => new Map(groups.map((g) => [g.id, instanceCount(lines, g.id)])),
     [groups, lines],
@@ -471,88 +477,49 @@ const EditPanel: React.FC = () => {
         )}
 
         <div className="flex flex-1 min-h-0 gap-4">
-          {/* Input */}
-          <div className="flex flex-col flex-1 min-w-0">
-            <label
-              htmlFor={textareaId}
-              className="flex items-center self-start h-7 mb-2 text-[13px] font-medium select-none text-(--label)"
-            >
-              Paste or type lyrics
-            </label>
-            {/* react-doctor-disable-next-line react-doctor/control-has-associated-label */}
-            <textarea
-              id={textareaId}
-              ref={textareaRef}
-              value={rawText}
-              onChange={textareaChange.onChange}
-              onFocus={() => setIsTypingLyrics(true)}
-              onBlur={handleTextareaBlur}
-              onCompositionStart={textareaChange.onCompositionStart}
-              onCompositionEnd={textareaChange.onCompositionEnd}
-              onPaste={handlePaste}
-              placeholder={LYRICS_TEXTAREA_PLACEHOLDER}
-              className="flex-1 py-2 px-3.5 text-sm font-medium leading-7 border rounded-xl resize-none bg-(--well) border-(--edge) caret-composer-accent focus:outline-none focus:border-(--lit-ring) placeholder:text-(--muted)"
-              spellCheck={false}
-            />
-          </div>
+          <EditTextInput
+            textareaId={textareaId}
+            textareaRef={textareaRef}
+            backdropRef={backdropRef}
+            rawText={rawText}
+            currentLineNumber={currentLineNumber}
+            onChange={textareaChange.onChange}
+            onFocus={() => setIsTypingLyrics(true)}
+            onBlur={handleTextareaBlur}
+            onCompositionStart={textareaChange.onCompositionStart}
+            onCompositionEnd={textareaChange.onCompositionEnd}
+            onPaste={handlePaste}
+            onScroll={onTextareaScroll}
+          />
 
-          {/* Preview */}
           <div className="flex flex-col flex-1 min-w-0">
             <PreviewSelectionBar
               selectedCount={selectedLines.size}
               onAssignAgent={handleBulkAgentChange}
               onClear={handleClearSelection}
             />
-            <Scroll className="flex-1 border rounded-xl border-(--edge) bg-(--well)">
-              {parsed.length === 0 || (parsed.length === 1 && parsed[0].isEmpty) ? (
-                <div className="flex items-center justify-center h-full text-sm text-(--muted)">
-                  Lyrics will appear here
-                </div>
-              ) : (
-                <div>
-                  {parsed.map((line, index) => {
-                    const prev = index > 0 ? parsed[index - 1] : null;
-                    const isFirstOfInstance =
-                      line.groupId !== undefined &&
-                      line.instanceIdx !== undefined &&
-                      (prev?.groupId !== line.groupId || prev?.instanceIdx !== line.instanceIdx);
-                    const group = line.groupId ? groups.find((g) => g.id === line.groupId) : undefined;
-                    const totalInstances = group ? (instanceCountByGroup.get(group.id) ?? 0) : 0;
-                    const groupTooltip =
-                      group && totalInstances > 1
-                        ? `Part of ${group.label} · linked to ${pluralize(totalInstances - 1, "other instance")}. Edits propagate.`
-                        : undefined;
-                    return (
-                      <div key={line.lineNumber}>
-                        {isFirstOfInstance && group && line.instanceIdx !== undefined && (
-                          <PreviewGroupHeader
-                            label={group.label}
-                            ordinal={instanceOrdinal(lines, group.id, line.instanceIdx)}
-                            total={totalInstances}
-                            color={group.color}
-                          />
-                        )}
-                        <LinePreview
-                          line={line}
-                          agents={agents}
-                          isSelected={selectedLines.has(line.lineNumber)}
-                          hasMultipleSelected={selectedLines.size > 1}
-                          groupColor={group?.color}
-                          groupTooltip={groupTooltip}
-                          onSelect={handleLineSelect}
-                          onAgentChange={handleAgentChange}
-                          onBulkAgentChange={handleBulkAgentChange}
-                          onBackgroundChange={handleBackgroundChange}
-                          onExtractLine={handleExtractLine}
-                          onGutterMouseDown={handleGutterMouseDown}
-                          onGutterMouseEnter={handleGutterMouseEnter}
-                          didDragRef={didDragRef}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+            <Scroll
+              className="flex-1 border rounded-xl border-(--edge) bg-(--well)"
+              viewportRef={previewViewportRef}
+              onScrollTopChange={onPreviewScroll}
+            >
+              <EditPreviewList
+                parsed={parsed}
+                lines={lines}
+                groups={groups}
+                agents={agents}
+                instanceCountByGroup={instanceCountByGroup}
+                selectedLines={selectedLines}
+                currentLineNumber={currentLineNumber}
+                onSelect={handleLineSelect}
+                onAgentChange={handleAgentChange}
+                onBulkAgentChange={handleBulkAgentChange}
+                onBackgroundChange={handleBackgroundChange}
+                onExtractLine={handleExtractLine}
+                onGutterMouseDown={handleGutterMouseDown}
+                onGutterMouseEnter={handleGutterMouseEnter}
+                didDragRef={didDragRef}
+              />
             </Scroll>
           </div>
         </div>

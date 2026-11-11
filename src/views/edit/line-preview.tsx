@@ -8,13 +8,7 @@ import { useCallback } from "react";
 
 // -- Interfaces ---------------------------------------------------------------
 
-interface LinePreviewProps {
-  line: ParsedLine;
-  agents: { id: string; name?: string }[];
-  isSelected: boolean;
-  hasMultipleSelected: boolean;
-  groupColor?: string;
-  groupTooltip?: string;
+interface LinePreviewHandlers {
   onSelect: (lineNumber: number, shiftKey: boolean) => void;
   onAgentChange: (lineId: string, agentId: string) => void;
   onBulkAgentChange: (agentId: string) => void;
@@ -25,6 +19,16 @@ interface LinePreviewProps {
   didDragRef: React.MutableRefObject<boolean>;
 }
 
+interface LinePreviewProps extends LinePreviewHandlers {
+  line: ParsedLine;
+  agents: { id: string; name?: string }[];
+  isSelected: boolean;
+  isCurrent: boolean;
+  hasMultipleSelected: boolean;
+  groupColor?: string;
+  groupTooltip?: string;
+}
+
 // -- Constants ----------------------------------------------------------------
 
 const LINE_COLUMN = "line-cell flex justify-center w-11 shrink-0 font-mono font-medium";
@@ -32,8 +36,9 @@ const ROW_BODY = "flex flex-1 min-w-0 items-center gap-2 pl-3 pr-2 border-b bord
 
 // -- Helpers ------------------------------------------------------------------
 
-function rowBodyTone(isSelected: boolean, hasBrackets: boolean, inGroup: boolean): string {
+function rowBodyTone(isSelected: boolean, isCurrent: boolean, hasBrackets: boolean, inGroup: boolean): string {
   if (isSelected) return "bg-composer-accent/15";
+  if (isCurrent) return "bg-composer-accent/7";
   if (hasBrackets) return "bg-composer-warning/8";
   return inGroup ? "bg-[color-mix(in_oklab,var(--group)_4%,transparent)]" : "group-hover:bg-(--layer-1)";
 }
@@ -69,7 +74,7 @@ const EmptyLinePreview: React.FC<{
   columnStyle: React.CSSProperties;
   onGutterMouseEnter: LinePreviewProps["onGutterMouseEnter"];
 }> = ({ lineNumber, columnStyle, onGutterMouseEnter }) => (
-  <div className="flex items-stretch min-h-7 opacity-60">
+  <div data-edit-line={lineNumber} className="flex items-stretch min-h-7 opacity-60">
     <span
       className={cn(LINE_COLUMN, "items-center text-[11px] tabular-nums text-(--muted) select-none")}
       style={columnStyle}
@@ -85,6 +90,7 @@ const LinePreview: React.FC<LinePreviewProps> = ({
   line,
   agents,
   isSelected,
+  isCurrent,
   hasMultipleSelected,
   groupColor,
   groupTooltip,
@@ -139,6 +145,8 @@ const LinePreview: React.FC<LinePreviewProps> = ({
     <div
       role="button"
       tabIndex={-1}
+      aria-current={isCurrent || undefined}
+      data-edit-line={line.lineNumber}
       className="group flex items-stretch min-h-7 cursor-pointer"
       style={groupColor ? { "--group": groupColor } : undefined}
       onMouseDown={handleMouseDown}
@@ -156,7 +164,7 @@ const LinePreview: React.FC<LinePreviewProps> = ({
         className={cn(
           LINE_COLUMN,
           "items-center text-[11px] tabular-nums select-none cursor-pointer",
-          isSelected ? "font-semibold text-composer-text" : "text-(--muted)",
+          isSelected || isCurrent ? "font-semibold text-composer-text" : "text-(--muted)",
         )}
         style={columnStyle}
         onMouseDown={(e) => onGutterMouseDown(line.lineNumber, e)}
@@ -169,7 +177,7 @@ const LinePreview: React.FC<LinePreviewProps> = ({
         {line.lineNumber}
       </span>
 
-      <div className={cn(ROW_BODY, rowBodyTone(isSelected, line.hasBrackets, groupColor !== undefined))}>
+      <div className={cn(ROW_BODY, rowBodyTone(isSelected, isCurrent, line.hasBrackets, groupColor !== undefined))}>
         <span
           data-testid="line-preview-text"
           className={cn(
@@ -209,3 +217,4 @@ const LinePreview: React.FC<LinePreviewProps> = ({
 // -- Exports ------------------------------------------------------------------
 
 export { LinePreview, PreviewGroupHeader };
+export type { LinePreviewHandlers };
