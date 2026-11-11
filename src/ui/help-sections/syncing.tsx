@@ -123,7 +123,8 @@ const SyncSection: React.FC = () => (
         Sync the lead first, then switch the track toggle at the top to Background, or press{" "}
         <InlineKeyBadge keys={getEffectiveKeysArray("sync.toggleTrack")} />. The background pass only visits lines with
         background vocals, and taps and holds time those words without touching the lead. In line mode, hold for the
-        whole phrase and its words spread across the hold.
+        whole phrase and its words spread across the hold. When you finish a line, playback skips ahead to the next
+        background line while <SettingLink setting="skipToNextBackgroundLine" /> is on.
       </p>
     </HelpTopic>
 
