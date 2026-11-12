@@ -13,7 +13,7 @@ import {
   PreviewGroupHeader,
 } from "@/views/edit/line-preview";
 import type { ParsedLine } from "@/views/edit/parse-lyrics";
-import { useMemo } from "react";
+import { type MutableRefObject, useCallback, useEffect, useMemo } from "react";
 import { Virtuoso } from "react-virtuoso";
 
 // -- Interfaces ---------------------------------------------------------------
@@ -24,6 +24,9 @@ interface LinePreviewListProps extends LinePreviewRowHandlers {
   groups: readonly LinkGroup[];
   agents: Agent[];
   selectedLines: ReadonlySet<number>;
+  currentLineNumber: number | null;
+  viewportRef: MutableRefObject<HTMLDivElement | null>;
+  onScrollTopChange: (scrollTop: number) => void;
   onBulkAgentChange: (agentId: string) => void;
 }
 
@@ -60,6 +63,9 @@ const LinePreviewList: React.FC<LinePreviewListProps> = ({
   groups,
   agents,
   selectedLines,
+  currentLineNumber,
+  viewportRef,
+  onScrollTopChange,
   onBulkAgentChange,
   ...rowHandlers
 }) => {
@@ -68,6 +74,22 @@ const LinePreviewList: React.FC<LinePreviewListProps> = ({
   const editsSelection = selectedLines.size > 1;
   const splitCharacter = useSettingsStore((s) => s.splitCharacter);
   const [scrollParent, keepScrollParent] = useScrollParent();
+
+  // The linked scroll reads and drives this viewport; only rows near it are mounted, so it aligns to those.
+  const attachViewport = useCallback(
+    (element: HTMLDivElement | null) => {
+      if (element) viewportRef.current = element;
+      keepScrollParent(element);
+    },
+    [viewportRef, keepScrollParent],
+  );
+
+  useEffect(() => {
+    if (!scrollParent) return;
+    const handleScroll = () => onScrollTopChange(scrollParent.scrollTop);
+    scrollParent.addEventListener("scroll", handleScroll, { passive: true });
+    return () => scrollParent.removeEventListener("scroll", handleScroll);
+  }, [scrollParent, onScrollTopChange]);
 
   const renderRow = (index: number, line: ParsedLine) => {
     const group = line.groupId ? groupsById.get(line.groupId) : undefined;
@@ -92,6 +114,7 @@ const LinePreviewList: React.FC<LinePreviewListProps> = ({
           line={line}
           agents={agents}
           isSelected={isSelected}
+          isCurrent={line.lineNumber === currentLineNumber}
           splitCharacter={splitCharacter}
           groupColor={group?.color}
           groupTooltip={groupTooltip}
@@ -103,7 +126,7 @@ const LinePreviewList: React.FC<LinePreviewListProps> = ({
   };
 
   return (
-    <ListScroll className="flex-1 border rounded-xl border-(--edge) bg-(--well)" scrollParentRef={keepScrollParent}>
+    <ListScroll className="flex-1 border rounded-xl border-(--edge) bg-(--well)" scrollParentRef={attachViewport}>
       {hasNoLyrics(parsed) ? (
         <div className="flex items-center justify-center h-full text-sm text-(--muted)">Lyrics will appear here</div>
       ) : (
