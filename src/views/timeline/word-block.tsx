@@ -1,14 +1,14 @@
+import { useDraggable } from "@dnd-kit/core";
+import { memo, useCallback, useMemo } from "react";
+import type { SyllablePosition } from "@/domain/word/syllable-groups";
 import { cn } from "@/utils/cn";
 import { findMatchingShortcut } from "@/utils/shortcut-matcher";
-import type { SyllablePosition } from "@/domain/word/syllable-groups";
 import { wordBlockWidth } from "@/views/timeline/row-geometry";
 import { selfKey } from "@/views/timeline/snap";
 import { SYLLABLE_RADIUS } from "@/views/timeline/syllable-radius";
 import { useTimelineStore } from "@/views/timeline/timeline-store";
-import { WordEdgeHandle } from "@/views/timeline/word-edge-handle";
+import { type WordEdge, WordEdgeHandle } from "@/views/timeline/word-edge-handle";
 import { wordFit } from "@/views/timeline/word-fit";
-import { useDraggable } from "@dnd-kit/core";
-import { useMemo } from "react";
 
 // -- Types ---------------------------------------------------------------------
 
@@ -25,6 +25,8 @@ interface WordBlockProps {
   zoom: number;
   isDimmed: boolean;
   isSelected: boolean;
+  isStepNext?: boolean;
+  isStepQueued?: boolean;
   isExplicit?: boolean;
   syllablePosition?: SyllablePosition;
   gapBefore?: boolean;
@@ -36,11 +38,11 @@ interface WordBlockProps {
   rightConjoined?: boolean;
   showLeftGrip?: boolean;
   showRightGrip?: boolean;
-  onClick: (e: React.MouseEvent) => void;
-  onResizeStart: (edge: "left" | "right", startX: number) => void;
-  onEdgeHover?: (edge: "left" | "right", hovering: boolean) => void;
-  onDoubleClick?: (e: React.MouseEvent) => void;
-  onContextMenu?: (e: React.MouseEvent) => void;
+  onClick: (e: React.MouseEvent, wordIndex: number) => void;
+  onResizeStart: (edge: WordEdge, startX: number, wordIndex: number) => void;
+  onEdgeHover?: (edge: WordEdge, hovering: boolean, wordIndex: number) => void;
+  onDoubleClick?: (e: React.MouseEvent, wordIndex: number) => void;
+  onContextMenu?: (e: React.MouseEvent, wordIndex: number) => void;
 }
 
 // -- Component -----------------------------------------------------------------
@@ -58,6 +60,8 @@ const WordBlock: React.FC<WordBlockProps> = ({
   zoom,
   isDimmed,
   isSelected,
+  isStepNext,
+  isStepQueued,
   isExplicit,
   syllablePosition = "none",
   syllableEdgesJoin = true,
@@ -78,6 +82,15 @@ const WordBlock: React.FC<WordBlockProps> = ({
   const left = begin * zoom;
   const width = wordBlockWidth(begin, end, zoom);
   const { fit, cut } = useMemo(() => wordFit(text, width), [text, width]);
+
+  const handleResizeStart = useCallback(
+    (edge: WordEdge, startX: number) => onResizeStart(edge, startX, wordIndex),
+    [onResizeStart, wordIndex],
+  );
+  const handleEdgeHover = useCallback(
+    (edge: WordEdge, hovering: boolean) => onEdgeHover?.(edge, hovering, wordIndex),
+    [onEdgeHover, wordIndex],
+  );
 
   const myKey = selfKey(lineId, wordIndex, trackType);
   const isSnapped = useTimelineStore((s) => s.snappedBlockId === myKey);
@@ -108,6 +121,8 @@ const WordBlock: React.FC<WordBlockProps> = ({
       data-begin={begin}
       data-end={end}
       data-selected={isSelected || undefined}
+      data-step-next={isStepNext || undefined}
+      data-step-queued={isStepQueued || undefined}
       data-gap-before={gapBefore || undefined}
       data-gap-after={gapAfter || undefined}
       className={cn(
@@ -122,16 +137,16 @@ const WordBlock: React.FC<WordBlockProps> = ({
       style={{ left, width, "--agent": color }}
       onClick={(e) => {
         e.stopPropagation();
-        onClick(e);
+        onClick(e, wordIndex);
       }}
       onDoubleClick={(e) => {
         e.stopPropagation();
-        onDoubleClick?.(e);
+        onDoubleClick?.(e, wordIndex);
       }}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        onContextMenu?.(e);
+        onContextMenu?.(e, wordIndex);
       }}
       {...attributes}
       {...listeners}
@@ -140,7 +155,7 @@ const WordBlock: React.FC<WordBlockProps> = ({
       onKeyDown={(e) => {
         if (e.repeat || (e.key !== "Enter" && e.key !== " ")) return;
         if (findMatchingShortcut(e.nativeEvent, "global") || findMatchingShortcut(e.nativeEvent, "timeline")) return;
-        onClick(e as unknown as React.MouseEvent);
+        onClick(e as unknown as React.MouseEvent, wordIndex);
       }}
     >
       <WordEdgeHandle
@@ -150,8 +165,8 @@ const WordBlock: React.FC<WordBlockProps> = ({
         conjoined={leftConjoined}
         highlighted={leftHighlighted}
         showGrip={showLeftGrip}
-        onResizeStart={onResizeStart}
-        onEdgeHover={onEdgeHover}
+        onResizeStart={handleResizeStart}
+        onEdgeHover={handleEdgeHover}
       />
 
       {fit !== "tick" && <span className="min-w-0 overflow-hidden whitespace-nowrap pointer-events-none">{text}</span>}
@@ -163,8 +178,8 @@ const WordBlock: React.FC<WordBlockProps> = ({
         conjoined={rightConjoined}
         highlighted={rightHighlighted}
         showGrip={showRightGrip}
-        onResizeStart={onResizeStart}
-        onEdgeHover={onEdgeHover}
+        onResizeStart={handleResizeStart}
+        onEdgeHover={handleEdgeHover}
       />
     </div>
   );
@@ -172,4 +187,5 @@ const WordBlock: React.FC<WordBlockProps> = ({
 
 // -- Exports -------------------------------------------------------------------
 
-export { WordBlock };
+const MemoizedWordBlock = memo(WordBlock);
+export { MemoizedWordBlock as WordBlock };

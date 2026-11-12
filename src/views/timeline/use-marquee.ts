@@ -3,6 +3,7 @@ import type { WordSelection } from "@/domain/selection/model";
 import { mergeWordSelections } from "@/domain/selection/set-ops";
 import { useFrameLoop } from "@/hooks/use-frame-loop";
 import { holdFrames } from "@/lib/frame-loop";
+import { noteGuideSignal } from "@/lib/guide-signals";
 import { swallowTrailingClick } from "@/lib/swallow-trailing-click";
 import { useProjectStore } from "@/stores/project";
 import { GROUP_HEADER_HEIGHT } from "@/views/timeline/group-header-row";
@@ -36,6 +37,7 @@ function useMarquee(scrollContainerRef: RefObject<HTMLDivElement | null>) {
   const [marqueeRect, setMarqueeRect] = useState<MarqueeRect | null>(null);
   const [autoScrolling, setAutoScrolling] = useState(false);
   const stateRef = useRef<MarqueeState>("idle");
+  const laneOwnsClickRef = useRef(false);
   const startRef = useRef({ clientX: 0, clientY: 0, scrollLeft: 0, scrollTop: 0 });
   const currentRef = useRef({ clientX: 0, clientY: 0 });
   const shiftRef = useRef(false);
@@ -158,6 +160,7 @@ function useMarquee(scrollContainerRef: RefObject<HTMLDivElement | null>) {
 
       stateRef.current = "pending";
       shiftRef.current = e.shiftKey;
+      laneOwnsClickRef.current = useTimelineStore.getState().stepTiming && target.closest("[data-word-track]") !== null;
       const { left, top } = readViewScroll(container);
       startRef.current = { clientX: e.clientX, clientY: e.clientY, scrollLeft: left, scrollTop: top };
       currentRef.current = { clientX: e.clientX, clientY: e.clientY };
@@ -195,14 +198,17 @@ function useMarquee(scrollContainerRef: RefObject<HTMLDivElement | null>) {
         if (rect) {
           const newSelections = computeSelection(rect);
           if (shiftRef.current) {
-            const existing = useTimelineStore.getState().selectedWords;
+            const { stepQueue, selectedWords } = useTimelineStore.getState();
+            const existing = stepQueue ?? selectedWords;
             useTimelineStore.getState().setSelectedWords(mergeWordSelections(existing, newSelections));
           } else {
             useTimelineStore.getState().setSelectedWords(newSelections);
           }
+          if (newSelections.length > 0)
+            noteGuideSignal(newSelections.length > 1 ? "timeline.selectMore" : "timeline.select");
         }
       } else if (stateRef.current === "pending") {
-        if (!shiftRef.current) {
+        if (!shiftRef.current && !laneOwnsClickRef.current) {
           useTimelineStore.getState().clearSelection();
         }
       }

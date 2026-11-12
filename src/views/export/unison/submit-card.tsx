@@ -33,13 +33,18 @@ interface SubmitterSession extends SubmitIdentity {
   keyId: string;
 }
 
+interface VideoSectionState {
+  busy: boolean;
+  capReached: boolean;
+}
+
 interface SubmitCardProps {
   lyricId: number | null;
   session: SubmitterSession;
   sessionEnded: boolean;
   onSessionEnded: () => void;
   source: UnisonExportSource;
-  videoSection?: React.ReactNode;
+  videoSection?: (state: VideoSectionState) => React.ReactNode;
   videoIds?: readonly string[];
 }
 
@@ -114,7 +119,7 @@ const NewSubmissionCard: React.FC<ModeCardProps> = (props) => {
           onLink={(lyricId) => useProjectStore.getState().linkUnisonLyric(String(lyricId))}
         />
       )}
-      {!capReached && videoSection}
+      {videoSection?.({ busy: sender.pending, capReached })}
       {!checks.canSubmit && <ChecksReason id={checksReasonId} />}
       <SubmitFooter
         identity={session}
@@ -123,7 +128,7 @@ const NewSubmissionCard: React.FC<ModeCardProps> = (props) => {
         failure={failureText}
         label="Submit to Unison"
         pending={sender.pending}
-        disabled={!submission || capReached}
+        disabled={!submission || capReached || source.settling}
         blockedReasonId={capReached ? versionsReasonId : checksReasonId}
         onSend={() => submission && void sender.send({ kind: "new", submission, videoIds })}
       />
@@ -204,7 +209,7 @@ const UpdateCard: React.FC<ModeCardProps & { lyricId: number }> = (props) => {
         failure={failureText}
         label={goesLive ? "Send update" : "Send for review"}
         pending={sender.pending}
-        disabled={blocked || !preview || preview.noChanges || settling}
+        disabled={blocked || !preview || preview.noChanges || settling || source.settling}
         blockedReasonId={blockedReasonId}
         onSend={() => void sender.send({ kind: "update", lyricId, input })}
       />
@@ -218,4 +223,4 @@ const SubmitCard: React.FC<SubmitCardProps> = ({ lyricId, ...props }) =>
 // -- Exports -------------------------------------------------------------------
 
 export { SubmitCard };
-export type { SubmitterSession };
+export type { SubmitterSession, VideoSectionState };

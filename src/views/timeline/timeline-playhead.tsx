@@ -21,6 +21,7 @@ interface TimelinePlayheadProps {
 // -- Constants -----------------------------------------------------------------
 
 const HIT_BUFFER_PX = 18;
+const RULER_DRAG_THRESHOLD_PX = 3;
 
 // -- Helpers -------------------------------------------------------------------
 
@@ -85,7 +86,8 @@ const TimelinePlayhead: React.FC<TimelinePlayheadProps> = ({
 
     const onMove = (e: MouseEvent) => {
       const playhead = playheadRef.current;
-      if (!playhead) return;
+      // A held button is a drag in progress, and hit testing on every move of it forces a layout.
+      if (!playhead || e.buttons !== 0) return;
 
       const playheadCenterXViewport = frame.containerLeft + frame.playheadCenterXLocal;
       const nearPlayhead =
@@ -134,6 +136,28 @@ const TimelinePlayhead: React.FC<TimelinePlayheadProps> = ({
 
   useEffect(() => drag.dispose, [drag]);
 
+  // A ruler press seeks there; moving while held keeps dragging the playhead. A plain click never pauses playback.
+  useEffect(() => {
+    if (!capHost) return;
+    const listening = new AbortController();
+    const { signal } = listening;
+    let pressX: number | null = null;
+    const onDown = (down: MouseEvent) => {
+      if (down.button !== 0 || down.altKey || useTimelineStore.getState().markerMode) return;
+      if (down.target instanceof Element && down.target.closest(".timeline-playhead-cap")) return;
+      pressX = down.clientX;
+    };
+    const onMove = (move: MouseEvent) => {
+      if (pressX === null || Math.abs(move.clientX - pressX) < RULER_DRAG_THRESHOLD_PX) return;
+      pressX = null;
+      drag.onMouseDown(move, true);
+    };
+    capHost.addEventListener("mousedown", onDown, { signal });
+    document.addEventListener("mousemove", onMove, { signal });
+    document.addEventListener("mouseup", () => (pressX = null), { signal });
+    return () => listening.abort();
+  }, [capHost, drag]);
+
   if (duration === 0) return null;
 
   return (
@@ -147,6 +171,8 @@ const TimelinePlayhead: React.FC<TimelinePlayheadProps> = ({
         ref={playheadRef}
         role="separator"
         aria-label="Playhead"
+        data-guide-spot="playhead"
+        data-guide-spot-clear="[data-overview-band]"
         aria-orientation="vertical"
         className="timeline-playhead-bar absolute top-0 left-0 w-0.5 rounded-b-[1px] bg-composer-accent cursor-ew-resize pointer-events-auto expanded-hit-x-sm"
         style={{ height: containerHeight }}

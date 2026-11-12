@@ -89,6 +89,7 @@
     );
   --cap: color-mix(in oklab, var(--ink) 8%, var(--color-composer-bg));
   --raised-edge: inset 0 0 0 1px var(--edge), inset 0 1px 0 var(--highlight);
+  --key-edge: color-mix(in oklab, var(--ink) 2.5%, transparent);
   --display: color-mix(in oklab, var(--color-composer-bg-dark) 75%, var(--color-composer-bg));
   --on-display: color-mix(in oklab, var(--ink) 82%, transparent);
   --on-display-dim: color-mix(in oklab, var(--ink) 38%, transparent);
@@ -98,6 +99,7 @@
   --raised-face: var(--layer-2);
   --raised-face-hover: var(--layer-3);
   --lit-ring: color-mix(in oklab, var(--color-composer-accent) 30%, transparent);
+  --key-lit-ring: color-mix(in oklab, var(--color-composer-accent) 5%, transparent);
   --gutter-bg: color-mix(in oklab, var(--color-composer-bg) 40%, var(--color-composer-bg-dark));
   --float-shadow:
     inset 0 0 0 1px var(--edge), inset 0 1px 0 var(--highlight), 0 18px 40px -12px rgb(var(--shade) / 0.55);
@@ -763,6 +765,22 @@ braccato-lyrics .blyrics-container {
   box-shadow: var(--float-shadow);
 }
 
+/* A disc of the orb's face under the count badge, clipped by the orb, so the gap shows only where they overlap. */
+@utility orb-badge-gap {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    top: -7px;
+    right: -7px;
+    width: 22px;
+    height: 22px;
+    border-radius: 9999px;
+    background: var(--pop);
+    pointer-events: none;
+  }
+}
+
 /* Timeline panning mode */
 @layer components {
   /* Extruded key: the base paints the side, the cap is the face. Press sinks the cap into the side. */
@@ -799,7 +817,7 @@ braccato-lyrics .blyrics-container {
       border-radius: inherit;
       background: linear-gradient(to bottom, var(--face-top), var(--face-bottom));
       box-shadow:
-        inset 0 0 0 1px var(--edge),
+        inset 0 0 0 1px var(--key-edge),
         inset 0 1px 0 var(--highlight);
       transition: translate 160ms cubic-bezier(0.22, 1, 0.36, 1);
     }
@@ -837,7 +855,7 @@ braccato-lyrics .blyrics-container {
     &[aria-pressed="true"] > .key-cap,
     &[data-lit] > .key-cap {
       box-shadow:
-        inset 0 0 0 1px var(--lit-ring),
+        inset 0 0 0 1px var(--key-lit-ring),
         inset 0 1px 0 var(--highlight);
     }
     &:disabled {
@@ -1125,6 +1143,73 @@ braccato-lyrics .blyrics-container {
       box-shadow:
         inset 0 0 0 2px var(--ink),
         0 1px 2px rgb(var(--shade) / 0.14);
+    }
+  }
+  /* Step timing: every state shares one flat fill and one shadow list, so each change fades. Other words lose chroma, not lightness. */
+  [data-scroll-container][data-step-timing] .word-face {
+    --step-face: color-mix(in oklab, var(--agent) 30%, var(--word-face));
+    --step-top: color-mix(in oklab, white 9%, transparent);
+    --step-ring: color-mix(in oklab, var(--ink) 6%, transparent);
+    --step-drop: var(--word-shadow);
+    --word-fill: var(--step-face);
+    opacity: 1;
+    color: color-mix(in oklab, var(--ink) 94%, transparent);
+    background-image: var(--hatch, none);
+    box-shadow:
+      inset 0 1px 0 var(--step-top),
+      inset 0 0 0 1px var(--step-ring),
+      0 1px 2px var(--step-drop);
+    transition-property: --word-fill, color, box-shadow;
+    transition-duration: 120ms;
+    transition-timing-function: ease-out;
+    &:not([data-selected], [data-step-next], [data-step-queued]) {
+      --word-fill: oklch(from var(--step-face) l 0.005 h);
+      --step-top: transparent;
+      --step-drop: transparent;
+      color: color-mix(in oklab, var(--ink) 88%, var(--color-composer-bg));
+    }
+    &[data-step-next] {
+      --word-fill: color-mix(in oklab, var(--color-composer-accent) 30%, var(--word-face));
+    }
+    &[data-selected] {
+      --word-fill: color-mix(in oklab, var(--color-composer-accent) 78%, black);
+      --step-top: color-mix(in oklab, white 18%, transparent);
+      --step-ring: transparent;
+      color: var(--color-composer-on-accent);
+    }
+  }
+  [data-scroll-container][data-step-timing] [data-step-chain="off"] .word-face {
+    opacity: 0.55;
+  }
+  html[data-scheme="light"] [data-scroll-container][data-step-timing] .word-face {
+    --word-fill: var(--step-face);
+    --step-face: color-mix(in oklab, var(--agent) 10%, color-mix(in oklab, white 85%, var(--color-composer-bg-dark)));
+    --step-ring: color-mix(in oklab, var(--agent) 30%, var(--edge));
+    background-image: var(--hatch, none);
+    color: color-mix(in oklab, var(--ink) 94%, transparent);
+    box-shadow:
+      inset 0 1px 0 var(--step-top),
+      inset 0 0 0 1px var(--step-ring),
+      0 1px 2px var(--step-drop);
+    &:not([data-selected], [data-step-next], [data-step-queued]) {
+      --step-ring: var(--edge);
+      color: color-mix(in oklab, var(--ink) 74%, var(--color-composer-bg));
+    }
+    &[data-step-next] {
+      --word-fill: color-mix(
+        in oklab,
+        var(--color-composer-accent) 14%,
+        color-mix(in oklab, white 85%, var(--color-composer-bg-dark))
+      );
+    }
+    &[data-selected] {
+      --word-fill: color-mix(in oklab, var(--color-composer-accent) 88%, black);
+      color: var(--color-composer-on-accent);
+      background-image: var(--hatch, none);
+      box-shadow:
+        inset 0 1px 0 var(--step-top),
+        inset 0 0 0 1px var(--step-ring),
+        0 1px 2px var(--step-drop);
     }
   }
 }

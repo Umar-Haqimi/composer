@@ -319,6 +319,18 @@ const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
     defaultBinding: { key: "]" },
   },
   {
+    id: "timeline.stepWord",
+    scope: "timeline",
+    description: "Step timing: end the word and start the next",
+    defaultBinding: { key: "\\" },
+  },
+  {
+    id: "timeline.stepTimingOff",
+    scope: "timeline",
+    description: "Turn step timing on or off",
+    defaultBinding: { key: "g" },
+  },
+  {
     id: "timeline.editWord",
     scope: "timeline",
     description: "Edit word",

@@ -16,7 +16,7 @@ import {
   BeatModelFilesSetting,
   VocalModelFilesSetting,
 } from "@/ui/settings/models/model-file-list";
-import { ResetAllSettingsSetting, ResetTourSetting } from "@/ui/settings/reset-settings";
+import { ResetAllSettingsSetting, ResetGuideSetting, UnmuteGuideHintsSetting } from "@/ui/settings/reset-settings";
 import type { SelectOption } from "@/ui/select";
 import type { SliderAction } from "@/ui/settings/setting-controls";
 import { ShortcutPresetGallery } from "@/ui/settings/shortcuts/shortcut-preset-gallery";
@@ -65,6 +65,9 @@ const asMilliseconds = (seconds: number) => `${(seconds * 1000).toFixed(0)}ms`;
 
 const SETTING_CONTROLS: Record<SettingId, SettingControl> = {
   showShortcutHints: TOGGLE,
+  showGuide: TOGGLE,
+  guideHints: TOGGLE,
+  unmuteGuideHints: { kind: "custom", Component: UnmuteGuideHintsSetting },
   unisonEnabled: TOGGLE,
   unisonAccount: { kind: "custom", Component: UnisonAccountSetting },
   unisonLibraryColumn: TOGGLE,
@@ -82,7 +85,7 @@ const SETTING_CONTROLS: Record<SettingId, SettingControl> = {
       { value: "off", label: "Off" },
     ],
   },
-  resetTour: { kind: "custom", Component: ResetTourSetting },
+  resetGuide: { kind: "custom", Component: ResetGuideSetting },
   resetAllSettings: { kind: "custom", Component: ResetAllSettingsSetting },
   libraryView: { kind: "custom", Component: LibraryViewSetting },
   linkedDivergenceAction: {
@@ -128,7 +131,11 @@ const SETTING_CONTROLS: Record<SettingId, SettingControl> = {
     format: (v) => `${v}px`,
     action: {
       label: "Use current",
-      onClick: () => useSettingsStore.getState().set("defaultRowHeight", useTimelineStore.getState().defaultRowHeight),
+      onClick: () => {
+        const { rowHeights, lastResizedLineId, defaultRowHeight } = useTimelineStore.getState();
+        const resizedHeight = lastResizedLineId === null ? undefined : rowHeights[lastResizedLineId];
+        useSettingsStore.getState().set("defaultRowHeight", resizedHeight ?? defaultRowHeight);
+      },
     },
   },
   timelineSnap: TOGGLE,
@@ -141,6 +148,7 @@ const SETTING_CONTROLS: Record<SettingId, SettingControl> = {
   beatGridLines: { kind: "select", options: [...BEAT_GRID_LINE_OPTIONS] },
   shareTimingInNewGroups: TOGGLE,
   loopOpenGroup: TOGGLE,
+  stepTimingBackground: TOGGLE,
   selectionLeadIn: { kind: "slider", min: 0, max: 1, step: 0.05, format: (v) => (v === 0 ? "Off" : asMilliseconds(v)) },
   snapDistanceWords: SNAP_DISTANCE,
   snapDistanceMarkers: SNAP_DISTANCE,

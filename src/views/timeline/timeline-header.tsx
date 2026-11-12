@@ -1,21 +1,3 @@
-import { isLinked } from "@/domain/instance/predicates";
-import { hasTransliteration } from "@/domain/language/has-transliteration";
-import { isLineSynced } from "@/domain/line/predicates";
-import type { WordTiming } from "@/domain/word/timing";
-import { useAudioStore } from "@/stores/audio";
-import { useProjectStore } from "@/stores/project";
-import { useSettingsStore } from "@/stores/settings";
-import { ShortcutToggleButton } from "@/ui/shortcut-toggle-button";
-import { TooltipGroup } from "@/ui/tooltip";
-import { convertLineToWord, splitIntoWordsWithMeta } from "@/utils/sync-helpers";
-import { HeaderAction } from "@/views/timeline/header-action";
-import { SnapLatch } from "@/views/timeline/snap-latch";
-import { SpectrumLatch } from "@/views/timeline/spectrum/spectrum-latch";
-import { TimelineAutoAlign } from "@/views/timeline/timeline-auto-align";
-import { TimelineZoomControls } from "@/views/timeline/timeline-header-controls";
-import { TimelineNotices } from "@/views/timeline/timeline-notices";
-import { useTimelineStore } from "@/views/timeline/timeline-store";
-import { useCueShortcuts } from "@/views/timeline/use-cue-shortcuts";
 import {
   IconArrowBackUp,
   IconArrowBarBoth,
@@ -29,11 +11,50 @@ import {
   IconTextPlus,
 } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo } from "react";
+import { useShallow } from "zustand/react/shallow";
+import { instanceKey } from "@/domain/instance/key";
+import { isLinked } from "@/domain/instance/predicates";
+import { hasTransliteration } from "@/domain/language/has-transliteration";
+import type { LyricLine } from "@/domain/line/model";
+import { isLineSynced } from "@/domain/line/predicates";
+import type { WordTiming } from "@/domain/word/timing";
+import { noteGuideSignal } from "@/lib/guide-signals";
+import { useAudioStore } from "@/stores/audio";
+import { useProjectStore } from "@/stores/project";
+import { useSettingsStore } from "@/stores/settings";
+import { ShortcutToggleButton } from "@/ui/shortcut-toggle-button";
+import { TooltipGroup } from "@/ui/tooltip";
+import { memoByIdentity } from "@/utils/memo-by-identity";
+import { convertLineToWord, splitIntoWordsWithMeta } from "@/utils/sync-helpers";
+import { HeaderAction } from "@/views/timeline/header-action";
+import { SnapLatch } from "@/views/timeline/snap-latch";
+import { SpectrumLatch } from "@/views/timeline/spectrum/spectrum-latch";
+import { StepTimingLatch } from "@/views/timeline/step-timing/step-timing-latch";
+import { TimelineAutoAlign } from "@/views/timeline/timeline-auto-align";
+import { TimelineZoomControls } from "@/views/timeline/timeline-header-controls";
+import { TimelineNotices } from "@/views/timeline/timeline-notices";
+import { useTimelineStore } from "@/views/timeline/timeline-store";
+import { useCueShortcuts } from "@/views/timeline/use-cue-shortcuts";
 
 interface TimelineHeaderProps {
   onImportLyrics?: () => void;
   scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
 }
+
+interface LineFacts {
+  hasTransliteration: boolean;
+  hasUnexpandedLines: boolean;
+  instanceKeys: string[];
+}
+
+// Selectors run on every project store change; these walk every line, so once per lines array.
+const lineFacts = memoByIdentity(
+  (lines: readonly LyricLine[]): LineFacts => ({
+    hasTransliteration: hasTransliteration(lines),
+    hasUnexpandedLines: lines.some((l) => !l.words?.length && l.text.trim().length > 0),
+    instanceKeys: [...new Set(lines.flatMap((l) => (isLinked(l) ? [instanceKey(l.groupId, l.instanceIdx)] : [])))],
+  }),
+);
 
 const TimelineHeader: React.FC<TimelineHeaderProps> = ({ onImportLyrics, scrollContainerRef }) => {
   useCueShortcuts();
@@ -44,23 +65,13 @@ const TimelineHeader: React.FC<TimelineHeaderProps> = ({ onImportLyrics, scrollC
   const markerMode = useTimelineStore((s) => s.markerMode);
   const toggleMarkerMode = useTimelineStore((s) => s.toggleMarkerMode);
   const showHints = useSettingsStore((s) => s.showShortcutHints);
-  const lines = useProjectStore((s) => s.lines);
   const collapsedInstances = useTimelineStore((s) => s.collapsedInstances);
   const setInstanceCollapsed = useTimelineStore((s) => s.setInstanceCollapsed);
   const textVariant = useTimelineStore((s) => s.textVariant);
   const toggleTextVariant = useTimelineStore((s) => s.toggleTextVariant);
-  const linesHaveTransliteration = useMemo(() => hasTransliteration(lines), [lines]);
-  const hasUnexpandedLines = useMemo(() => lines.some((l) => !l.words?.length && l.text.trim().length > 0), [lines]);
-
-  const instanceKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const line of lines) {
-      if (isLinked(line)) {
-        keys.add(`${line.groupId}:${line.instanceIdx}`);
-      }
-    }
-    return [...keys];
-  }, [lines]);
+  const linesHaveTransliteration = useProjectStore((s) => lineFacts(s.lines).hasTransliteration);
+  const hasUnexpandedLines = useProjectStore((s) => lineFacts(s.lines).hasUnexpandedLines);
+  const instanceKeys = useProjectStore(useShallow((s) => lineFacts(s.lines).instanceKeys));
 
   const hasGroups = instanceKeys.length > 0;
   const anyExpanded = useMemo(
@@ -70,12 +81,13 @@ const TimelineHeader: React.FC<TimelineHeaderProps> = ({ onImportLyrics, scrollC
 
   const handleToggleAllCollapsed = useCallback(() => {
     for (const k of instanceKeys) setInstanceCollapsed(k, anyExpanded);
+    noteGuideSignal("timeline.collapseAll");
   }, [instanceKeys, anyExpanded, setInstanceCollapsed]);
 
   const handleExpandAll = useCallback(() => {
     const currentTime = useAudioStore.getState().currentTime;
     const wordDuration = useSettingsStore.getState().defaultWordDuration;
-    const updateLinesWithHistory = useProjectStore.getState().updateLinesWithHistory;
+    const { lines, updateLinesWithHistory } = useProjectStore.getState();
 
     const updates: Array<{ id: string; updates: { words?: WordTiming[]; begin?: undefined; end?: undefined } }> = [];
 
@@ -117,7 +129,7 @@ const TimelineHeader: React.FC<TimelineHeaderProps> = ({ onImportLyrics, scrollC
         useTimelineStore.getState().setSelectedWords(newSelections);
       }
     }
-  }, [lines]);
+  }, []);
 
   useEffect(() => {
     const handler = () => handleExpandAll();
@@ -179,14 +191,17 @@ const TimelineHeader: React.FC<TimelineHeaderProps> = ({ onImportLyrics, scrollC
               active={previewSidebar}
               label="Preview"
               shortcut="timeline.togglePreview"
-              onClick={() => useSettingsStore.getState().toggle("previewSidebar")}
+              onClick={() => {
+                useSettingsStore.getState().toggle("previewSidebar");
+                if (useSettingsStore.getState().previewSidebar) noteGuideSignal("preview.sidebar");
+              }}
               iconOnly
             >
               <IconEye />
             </ShortcutToggleButton>
           </div>
 
-          <div className="tray">
+          <div className="tray" data-guide-spot="snap">
             <SnapLatch />
             <ShortcutToggleButton
               active={markerMode}
@@ -197,6 +212,7 @@ const TimelineHeader: React.FC<TimelineHeaderProps> = ({ onImportLyrics, scrollC
             >
               <IconMapPin />
             </ShortcutToggleButton>
+            <StepTimingLatch />
           </div>
 
           <div className="tray">
@@ -229,6 +245,7 @@ const TimelineHeader: React.FC<TimelineHeaderProps> = ({ onImportLyrics, scrollC
               description={anyExpanded ? "Collapse all groups" : "Expand all groups"}
               shortcut="timeline.toggleAllCollapsed"
               showHint={showHints}
+              guideSpot="collapseAll"
             >
               {anyExpanded ? <IconChevronsUp /> : <IconChevronsDown />}
             </HeaderAction>

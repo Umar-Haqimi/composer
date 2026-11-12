@@ -62,6 +62,7 @@ interface SettingsState extends LlmProfilesState, SnapSettings, SpectrumSettings
   previewSidebarWidth: number;
   shareTimingInNewGroups: boolean;
   loopOpenGroup: boolean;
+  stepTimingBackground: boolean;
   syllablesFollowRolling: boolean;
   timelineHorizontalScroll: boolean;
 
@@ -86,6 +87,8 @@ interface SettingsState extends LlmProfilesState, SnapSettings, SpectrumSettings
   launchScreen: LaunchScreen;
 
   showShortcutHints: boolean;
+  showGuide: boolean;
+  guideHints: boolean;
   showSyllableIndicators: boolean;
   splitCharacter: string;
   autoExtractBackgroundVocals: boolean;
@@ -154,6 +157,7 @@ const DEFAULTS: SettingsState = {
   previewSidebarWidth: PREVIEW_SIDEBAR_WIDTH.default,
   shareTimingInNewGroups: true,
   loopOpenGroup: false,
+  stepTimingBackground: false,
   syllablesFollowRolling: false,
   timelineHorizontalScroll: false,
 
@@ -179,6 +183,8 @@ const DEFAULTS: SettingsState = {
   launchScreen: "projects",
 
   showShortcutHints: true,
+  showGuide: true,
+  guideHints: true,
   showSyllableIndicators: true,
   splitCharacter: "|",
   autoExtractBackgroundVocals: true,

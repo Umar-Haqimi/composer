@@ -1,10 +1,14 @@
+import { noteGuideSignal } from "@/lib/guide-signals";
 import { useAudioStore } from "@/stores/audio";
 import { useProjectStore } from "@/stores/project";
 import { useSettingsStore } from "@/stores/settings";
 import { hiddenByDismissal } from "@/ui/notices/notice-model";
 import { replacedOwnTimingNote, showGroupActionToast, showKeptOwnTimingToast } from "@/utils/group-toast";
-import { type RepeatingSection, findRepeatingStandaloneSections } from "@/views/grouping/repeating-sections";
+import { groupingSuggestions } from "@/views/grouping/grouping-suggestions";
+import type { RepeatingSection } from "@/views/grouping/repeating-sections";
 import { useMemo } from "react";
+
+const NO_SUGGESTIONS: RepeatingSection[] = [];
 
 // The header notice and the edit preview's ghost groups both read this, so they always agree.
 function useVisibleGroupingSuggestions(enabled = true) {
@@ -14,7 +18,7 @@ function useVisibleGroupingSuggestions(enabled = true) {
   const splitChar = useSettingsStore((s) => s.splitCharacter);
 
   const suggestions = useMemo(
-    () => (enabled ? findRepeatingStandaloneSections(lines, splitChar) : []),
+    () => (enabled ? groupingSuggestions(lines, splitChar) : NO_SUGGESTIONS),
     [enabled, lines, splitChar],
   );
   return useMemo(() => hiddenByDismissal(suggestions, dismissed), [suggestions, dismissed]);
@@ -24,6 +28,7 @@ function groupSections(sections: readonly RepeatingSection[]): number {
   const { duration } = useAudioStore.getState();
   const { groupRepeatingSections } = useProjectStore.getState();
   const outcomes = sections.map((section) => groupRepeatingSections(section.starts, section.length, { duration }));
+  noteGuideSignal("edit.group");
   showKeptOwnTimingToast(
     outcomes.flatMap((outcome) => outcome.keptOwnTiming),
     "edit",

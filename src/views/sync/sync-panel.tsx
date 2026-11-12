@@ -1,10 +1,10 @@
-import { getLanguageDisplayLine } from "@/domain/language/display";
 import { hasTransliteration } from "@/domain/language/has-transliteration";
 import { playingLineIndex } from "@/domain/line/playing-line";
 import { isSyncComplete, syncProgress } from "@/domain/line/sync-progress";
 import { previousSlot, slotBounds } from "@/domain/sync/cursor";
 import { useFrameLoop } from "@/hooks/use-frame-loop";
 import { useSyncHandlers } from "@/hooks/useSyncHandlers";
+import { noteGuideSignal } from "@/lib/guide-signals";
 import { cancelCountIn, isCountingIn } from "@/lib/sync-count-in";
 import { livePlaybackTime, useAudioStore } from "@/stores/audio";
 import { isAnyModalOpen } from "@/stores/escape-layer-stack";
@@ -15,7 +15,7 @@ import { EmptyState } from "@/ui/empty-state";
 import { runHistoryShortcut } from "@/utils/history-shortcut";
 import { findMatchingShortcut } from "@/utils/shortcut-matcher";
 import { type SyncState, getNudgeAmount } from "@/utils/sync-helpers";
-import { isTypingTarget } from "@/utils/typing-target";
+import { focusedControlOwnsKey, isTypingTarget } from "@/utils/typing-target";
 import { buildLaneRows } from "@/views/sync/lane-rows";
 import { SyncEndScreen } from "@/views/sync/sync-end-screen";
 import { SyncLineList } from "@/views/sync/sync-line-list";
@@ -23,6 +23,7 @@ import { SyncFooter, SyncGestureControls } from "@/views/sync/sync-footer";
 import { SyncHeader } from "@/views/sync/sync-header";
 import { type RippleTarget, SyncLane } from "@/views/sync/sync-lane";
 import { usePlacementPreroll } from "@/views/sync/use-placement-preroll";
+import { useDisplayLines } from "@/views/sync/use-display-lines";
 import { useSharedSyncView } from "@/views/sync/use-shared-sync-view";
 import { useSyncCountIn } from "@/views/sync/use-sync-count-in";
 import { useTimelineStore } from "@/views/timeline/timeline-store";
@@ -36,7 +37,6 @@ const SyncPanel: React.FC = () => {
   const agents = useProjectStore((s) => s.agents);
   const undo = useProjectStore((s) => s.undo);
   const redo = useProjectStore((s) => s.redo);
-  const activeTab = useProjectStore((s) => s.activeTab);
   const granularity = useProjectStore((s) => s.granularity);
   const setGranularity = useProjectStore((s) => s.setGranularity);
   const source = useAudioStore((s) => s.source);
@@ -48,16 +48,14 @@ const SyncPanel: React.FC = () => {
   const audioElement = useAudioStore((s) => s.audioElement);
   const seekTo = useAudioStore((s) => s.seekTo);
   const textVariant = useTimelineStore((s) => s.textVariant);
+  const splitCharacter = useSettingsStore((s) => s.splitCharacter);
   const toggleTextVariant = useTimelineStore((s) => s.toggleTextVariant);
+  const toggleReadingText = useCallback(() => {
+    toggleTextVariant();
+    if (useTimelineStore.getState().textVariant === "transliteration") noteGuideSignal("languages.showWhileSyncing");
+  }, [toggleTextVariant]);
   const linesHaveTransliteration = useMemo(() => hasTransliteration(lines), [lines]);
-  const displayLines = useMemo(
-    () =>
-      lines.map((line) => ({
-        ...line,
-        ...getLanguageDisplayLine(line, textVariant),
-      })),
-    [lines, textVariant],
-  );
+  const displayLines = useDisplayLines(lines, textVariant);
 
   const [syncState, setSyncState] = useState<SyncState>({
     position: { lineIndex: 0, wordIndex: 0 },
@@ -103,9 +101,12 @@ const SyncPanel: React.FC = () => {
     cursor,
     skippedInstances,
   );
+  const showLineList = (!isPlaying && !countIn.countingIn) || editMode;
+  const showsLane = !showLineList && !isComplete;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: buildLaneRows splits words by the split character
   const laneRows = useMemo(
-    () => buildLaneRows({ lines, displayLines, agents, groupTags, folded }),
-    [lines, displayLines, agents, groupTags, folded],
+    () => (showsLane ? buildLaneRows({ lines, displayLines, agents, groupTags, folded }) : []),
+    [showsLane, lines, displayLines, agents, groupTags, folded, splitCharacter],
   );
 
   const stopSessionAtSongEnd = useEffectEvent(() => {
@@ -178,6 +179,7 @@ const SyncPanel: React.FC = () => {
     (newGranularity: "line" | "word") => {
       if (newGranularity === granularity) return;
       setGranularity(newGranularity);
+      noteGuideSignal("sync.granularity");
     },
     [granularity, setGranularity],
   );
@@ -192,9 +194,13 @@ const SyncPanel: React.FC = () => {
     if (source && lines.length > 0) handleToggleEdit();
   });
 
-  const playingLine = useMemo(() => playingLineIndex(lines, currentTime), [lines, currentTime]);
+  const playingLine = useMemo(
+    () => (editMode ? playingLineIndex(lines, currentTime) : -1),
+    [editMode, lines, currentTime],
+  );
 
   const { lineIndex, wordIndex } = cursor;
+  const noteSyncUndo = useEffectEvent(() => noteGuideSignal("sync.undoTap", lines[lineIndex]?.id));
 
   const lastSyncedTime = useMemo(() => {
     const slot = previousSlot(lines, cursor, granularity);
@@ -259,9 +265,10 @@ const SyncPanel: React.FC = () => {
   const handleTapPointerDown = useCallback(
     (e: React.PointerEvent<HTMLButtonElement>) => {
       e.preventDefault();
+      if (e.pointerType === "mouse" && !editMode) noteGuideSignal("sync.mouseTap");
       performTap();
     },
-    [performTap],
+    [performTap, editMode],
   );
 
   // Only the pointer that opened the hold may close it, otherwise a second
@@ -285,7 +292,6 @@ const SyncPanel: React.FC = () => {
     [endHold],
   );
 
-  const showLineList = (!isPlaying && !countIn.countingIn) || editMode;
   const showGestureCircles = !isComplete && !editMode && isPlaying;
 
   // The release handlers live on the hold circle, so a hold outliving that
@@ -298,70 +304,82 @@ const SyncPanel: React.FC = () => {
     }
   }, [showGestureCircles, isHolding, endHold]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (activeTab !== "sync") return;
-      if (isAnyModalOpen()) return;
+  // Effect events read the latest state, so the listeners attach once instead of on every hold or edit toggle.
+  const onSyncKeyDown = useEffectEvent((e: KeyboardEvent) => {
+    if (useProjectStore.getState().activeTab !== "sync") return;
+    if (isAnyModalOpen()) return;
 
-      if (runHistoryShortcut(e, (action) => (action === "undo" ? undo() : redo()), { scope: "sync" })) return;
-
-      const matched = findMatchingShortcut(e, "sync");
-      if (!matched) return;
-
-      switch (matched) {
-        case "sync.tap":
-          e.preventDefault();
-          performKeyboardTap();
-          break;
-        case "sync.holdSync":
-          e.preventDefault();
-          if (editMode || isHolding) return;
-          heldKeyCodeRef.current = e.code;
-          beginKeyboardHold();
-          break;
-        case "sync.nudgeLeft":
-          e.preventDefault();
-          handleNudgeLastSynced(-getNudgeAmount());
-          break;
-        case "sync.nudgeRight":
-          e.preventDefault();
-          handleNudgeLastSynced(getNudgeAmount());
-          break;
-        case "sync.undoAndRewind":
-          e.preventDefault();
-          if (editMode || isHolding || e.repeat) return;
-          handleUndoAndRewindLine();
-          break;
-        case "sync.toggleTextVariant":
-          e.preventDefault();
-          toggleTextVariant();
-          break;
-        case "sync.toggleEdit":
-          if (isTypingTarget(e.target)) return;
-          e.preventDefault();
-          toggleEditFromKeyboard();
-          break;
-      }
+    const runHistory = (action: "undo" | "redo") => {
+      if (action === "redo") return redo();
+      if (!useProjectStore.getState().canUndo()) return;
+      noteSyncUndo();
+      undo();
+      noteGuideSignal("sync.fixTap");
     };
+    if (runHistoryShortcut(e, runHistory, { scope: "sync" })) return;
 
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (activeTab !== "sync" || !isHolding) return;
-      if (isAnyModalOpen()) return;
+    const matched = findMatchingShortcut(e, "sync");
+    if (!matched || focusedControlOwnsKey(e)) return;
 
-      if (e.code === heldKeyCodeRef.current) {
+    switch (matched) {
+      case "sync.tap":
         e.preventDefault();
-        heldKeyCodeRef.current = null;
-        endKeyboardHold();
-      }
-    };
+        if (!editMode) noteGuideSignal("sync.keyTap");
+        performKeyboardTap();
+        break;
+      case "sync.holdSync":
+        e.preventDefault();
+        if (editMode || isHolding) return;
+        heldKeyCodeRef.current = e.code;
+        beginKeyboardHold();
+        break;
+      case "sync.nudgeLeft":
+        e.preventDefault();
+        handleNudgeLastSynced(-getNudgeAmount());
+        break;
+      case "sync.nudgeRight":
+        e.preventDefault();
+        handleNudgeLastSynced(getNudgeAmount());
+        break;
+      case "sync.undoAndRewind":
+        e.preventDefault();
+        if (editMode || isHolding || e.repeat) return;
+        handleUndoAndRewindLine();
+        break;
+      case "sync.toggleTextVariant":
+        e.preventDefault();
+        toggleReadingText();
+        break;
+      case "sync.toggleEdit":
+        if (isTypingTarget(e.target)) return;
+        e.preventDefault();
+        toggleEditFromKeyboard();
+        break;
+    }
+  });
 
-    const handleBlur = () => {
-      if (isHolding) {
-        heldKeyCodeRef.current = null;
-        endKeyboardHold();
-      }
-    };
+  const onSyncKeyUp = useEffectEvent((e: KeyboardEvent) => {
+    if (useProjectStore.getState().activeTab !== "sync" || !isHolding) return;
+    if (isAnyModalOpen()) return;
 
+    if (e.code === heldKeyCodeRef.current) {
+      e.preventDefault();
+      heldKeyCodeRef.current = null;
+      endKeyboardHold();
+    }
+  });
+
+  const onSyncBlur = useEffectEvent(() => {
+    if (isHolding) {
+      heldKeyCodeRef.current = null;
+      endKeyboardHold();
+    }
+  });
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => onSyncKeyDown(e);
+    const handleKeyUp = (e: KeyboardEvent) => onSyncKeyUp(e);
+    const handleBlur = () => onSyncBlur();
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
     window.addEventListener("blur", handleBlur);
@@ -370,7 +388,7 @@ const SyncPanel: React.FC = () => {
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", handleBlur);
     };
-  }, [activeTab, undo, redo, handleNudgeLastSynced, handleUndoAndRewindLine, editMode, isHolding, toggleTextVariant]);
+  }, []);
 
   if (!source) {
     return (
@@ -394,7 +412,7 @@ const SyncPanel: React.FC = () => {
         progress={progress}
         textVariant={textVariant}
         hasTransliteration={linesHaveTransliteration}
-        toggleTextVariant={toggleTextVariant}
+        toggleTextVariant={toggleReadingText}
         granularity={granularity}
         handleGranularityChange={handleGranularityChange}
         editMode={editMode}
@@ -419,6 +437,7 @@ const SyncPanel: React.FC = () => {
           skippedByLastLineId={skippedByLastLineId}
           handlers={syncHandlers}
           scrollContainerRef={scrollContainerRef}
+          splitCharacter={splitCharacter}
         />
       ) : isComplete ? (
         <SyncEndScreen syncComplete={syncComplete} />

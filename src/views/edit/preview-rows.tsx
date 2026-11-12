@@ -3,9 +3,10 @@ import { instanceCount, instanceOrdinal } from "@/domain/instance/enumerate";
 import { backgroundFields, withSeededBackground } from "@/domain/line/background";
 import { remapWordTextsPreservingTiming } from "@/domain/word/remap-text";
 import type { WordTiming } from "@/domain/word/timing";
+import { noteGuideSignal } from "@/lib/guide-signals";
 import { useProjectStore } from "@/stores/project";
 import { useSettingsStore } from "@/stores/settings";
-import { extractInlineFromLine } from "@/utils/background-vocal-extraction";
+import { extractInlineAcrossLinkedLines } from "@/utils/background-vocal-extraction";
 import { pluralize } from "@/utils/pluralize";
 import { LinePreview } from "@/views/edit/line-preview";
 import type { ParsedLine } from "@/views/edit/parse-lyrics";
@@ -37,6 +38,8 @@ interface PreviewRowsProps {
 
 function handleAgentChange(lineId: string, agentId: string): void {
   useProjectStore.getState().updateLineWithHistory(lineId, { agentId });
+  noteGuideSignal("edit.singer");
+  noteGuideSignal("edit.singerOneLine");
 }
 
 function handleBackgroundChange(lineId: string, text: string): void {
@@ -53,25 +56,18 @@ function handleBackgroundChange(lineId: string, text: string): void {
   useProjectStore
     .getState()
     .updateLineWithHistory(lineId, backgroundFields({ text: newBgText, words, source: "manual" }));
+  if (newBgText) noteGuideSignal("edit.background");
 }
 
 function handleExtractLine(lineId: string): void {
-  const target = useProjectStore.getState().lines.find((line) => line.id === lineId);
-  if (!target) return;
-  const extracted = extractInlineFromLine(target, {
+  const updates = extractInlineAcrossLinkedLines(useProjectStore.getState().lines, lineId, {
     mergeStandaloneLines: false,
     preserveBrackets: useSettingsStore.getState().preserveBracketsOnExtraction,
   });
-  if (extracted === target) return;
-  useProjectStore.getState().updateLineWithHistory(lineId, {
-    text: extracted.text,
-    words: extracted.words,
-    ...backgroundFields({
-      text: extracted.backgroundText,
-      words: extracted.backgroundWords,
-      source: extracted.backgroundTextSource ?? "manual",
-    }),
-  });
+  if (updates.length === 0) return;
+  useProjectStore.getState().updateLinesWithHistory(updates, { propagateToSiblings: false });
+  noteGuideSignal("edit.background");
+  noteGuideSignal("edit.extractOneLine");
 }
 
 function renameGroup(group: LinkGroup, next: string): void {
@@ -94,6 +90,8 @@ const PreviewRows: React.FC<PreviewRowsProps> = ({
   didDragRef,
 }) => {
   const agents = useProjectStore((s) => s.agents);
+  const splitCharacter = useSettingsStore((s) => s.splitCharacter);
+  const editsSelection = selectedLines.size > 1;
   const lines = useProjectStore((s) => s.lines);
   const groups = useProjectStore((s) => s.groups);
   const instanceCountByGroup = useMemo(
@@ -126,6 +124,7 @@ const PreviewRows: React.FC<PreviewRowsProps> = ({
           group && totalInstances > 1
             ? `Part of ${group.label} · linked to ${pluralize(totalInstances - 1, "other instance")}. Edits propagate.`
             : undefined;
+        const isSelected = selectedLines.has(line.lineNumber);
         return (
           <div key={line.lineNumber}>
             {isFirstOfInstance && group && line.instanceIdx !== undefined && (
@@ -154,15 +153,15 @@ const PreviewRows: React.FC<PreviewRowsProps> = ({
             <LinePreview
               line={line}
               agents={agents}
-              isSelected={selectedLines.has(line.lineNumber)}
+              isSelected={isSelected}
               isPlaying={playingLineIds.has(line.lineId)}
-              hasMultipleSelected={selectedLines.size > 1}
+              splitCharacter={splitCharacter}
               groupColor={group?.color ?? (ghost ? GHOST_COLOR : undefined)}
               isGhostGroup={ghost !== undefined}
               groupTooltip={groupTooltip}
               onSelect={onSelect}
               onAgentChange={handleAgentChange}
-              onBulkAgentChange={onBulkAgentChange}
+              onBulkAgentChange={isSelected && editsSelection ? onBulkAgentChange : undefined}
               onBackgroundChange={handleBackgroundChange}
               onExtractLine={handleExtractLine}
               onGutterMouseDown={onGutterMouseDown}

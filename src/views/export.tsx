@@ -1,5 +1,5 @@
 import { IconFolderOpen } from "@tabler/icons-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useExportTtml } from "@/hooks/use-export-ttml";
 import { useUnisonFeatures } from "@/hooks/unison/useUnisonFeatures";
@@ -10,7 +10,9 @@ import { useProjectStore } from "@/stores/project";
 import { Button } from "@/ui/button";
 import { EmptyState } from "@/ui/empty-state";
 import { validateTtml } from "@/utils/lyrics-parsers/validate-ttml";
+import { noteGuideExport, noteGuideSignal } from "@/lib/guide-signals";
 import { AlignmentReviewNotice } from "@/views/export/alignment-review-notice";
+import { UntimedLinesNotice } from "@/views/export/untimed-lines-notice";
 import { applyEditsToProject } from "@/views/export/apply-edits-feedback";
 import { ExportCodePane } from "@/views/export/export-code-pane";
 import { ExportHeader } from "@/views/export/export-header";
@@ -79,6 +81,7 @@ const ExportPanel: React.FC = () => {
 
     downloadText(outgoingContent(), fileName, "application/ttml+xml;charset=utf-8");
     useProjectStore.getState().clearUnexportedImport();
+    noteGuideExport();
   }, [exportContent, isExportable, fileName, alignment.confirmExport, outgoingContent]);
 
   const handleCopy = useCallback(async () => {
@@ -87,6 +90,7 @@ const ExportPanel: React.FC = () => {
 
     await navigator.clipboard.writeText(outgoingContent());
     useProjectStore.getState().clearUnexportedImport();
+    noteGuideExport();
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [exportContent, isExportable, alignment.confirmExport, outgoingContent]);
@@ -120,22 +124,45 @@ const ExportPanel: React.FC = () => {
     [generatedTtml, hasConflict, setEditState],
   );
 
+  const settledEditedContent = useDeferredValue(editedContent);
+  const settledGeneratedTtml = useDeferredValue(generatedTtml);
+  const unisonSettling = settledEditedContent !== editedContent || settledGeneratedTtml !== generatedTtml;
+  const unisonContent = useMemo(() => {
+    if (!unisonEnabled) return "";
+    const settledExportContent = settledEditedContent ?? settledGeneratedTtml;
+    return (
+      settledExportContent &&
+      outgoingTtml({
+        editedContent: settledEditedContent,
+        generatedContent: settledGeneratedTtml,
+        duration,
+        exportTiming,
+        youtubeVideoId,
+      })
+    );
+  }, [unisonEnabled, settledEditedContent, settledGeneratedTtml, duration, exportTiming, youtubeVideoId]);
+
   const unisonSource = useMemo(
-    (): UnisonExportSource => ({
-      content: exportContent && outgoingContent(),
-      isEdited: editedContent !== null,
-      videoId: youtubeVideoId,
-      durationSeconds: duration,
-      lineCount,
-      syncedLineCount,
-      review: alignment.review,
-      reviewInTimeline: alignment.reviewInTimeline,
-      regenerate: handleRegenerate,
-    }),
+    (): UnisonExportSource | null =>
+      unisonEnabled
+        ? {
+            content: unisonContent,
+            settling: unisonSettling,
+            isEdited: settledEditedContent !== null,
+            videoId: youtubeVideoId,
+            durationSeconds: duration,
+            lineCount,
+            syncedLineCount,
+            review: alignment.review,
+            reviewInTimeline: alignment.reviewInTimeline,
+            regenerate: handleRegenerate,
+          }
+        : null,
     [
-      exportContent,
-      outgoingContent,
-      editedContent,
+      unisonEnabled,
+      unisonContent,
+      unisonSettling,
+      settledEditedContent,
       youtubeVideoId,
       duration,
       lineCount,
@@ -182,7 +209,10 @@ const ExportPanel: React.FC = () => {
         copied={copied}
         exportTiming={exportTiming}
         lineTimingLocked={isEditing || editBlocksLineTiming}
-        onExportTimingChange={setExportTiming}
+        onExportTimingChange={(timing) => {
+          setExportTiming(timing);
+          noteGuideSignal("export.timing");
+        }}
         onRegenerate={handleRegenerate}
         onEdit={handleEdit}
         onCopy={handleCopy}
@@ -201,15 +231,18 @@ const ExportPanel: React.FC = () => {
           onRegenerate={handleRegenerate}
           onKeepEdits={handleKeepEdits}
           notice={
-            <AlignmentReviewNotice
-              notice={alignment.notice}
-              review={alignment.review}
-              onReview={alignment.reviewInTimeline}
-              onDismiss={alignment.dismiss}
-            />
+            <>
+              <UntimedLinesNotice />
+              <AlignmentReviewNotice
+                notice={alignment.notice}
+                review={alignment.review}
+                onReview={alignment.reviewInTimeline}
+                onDismiss={alignment.dismiss}
+              />
+            </>
           }
         />
-        <ExportSidePanel unison={unisonEnabled && <UnisonPanel source={unisonSource} />} />
+        <ExportSidePanel unison={unisonSource && <UnisonPanel source={unisonSource} />} />
       </div>
     </div>
   );

@@ -4,8 +4,11 @@ import { holdFrames, subscribeFrame } from "@/lib/frame-loop";
 import { notePlacement } from "@/lib/replay-cue";
 import { xToTime } from "@/views/timeline/coords";
 import { computeEdgeScrollVelocity } from "@/views/timeline/edge-scroll";
+import { raisePointerShield } from "@/views/timeline/pointer-shield";
+import { noteReplaySpot } from "@/views/timeline/replay-spot-signal";
+import { holdsSnapBypass } from "@/views/timeline/snap-bypass-key";
 import { GUTTER_WIDTH } from "@/views/timeline/timeline-store";
-import { readViewScroll, scrollViewBy, viewScrollLeft } from "@/views/timeline/view-scroll";
+import { readViewScroll, scrollView, viewScrollLeft } from "@/views/timeline/view-scroll";
 
 // -- Types ---------------------------------------------------------------------
 
@@ -22,8 +25,10 @@ interface PlayheadDragConfig {
   snapTime: (time: number, bypass: boolean) => number;
 }
 
+type DragStart = Pick<MouseEvent, "button" | "clientX" | "metaKey" | "ctrlKey" | "preventDefault">;
+
 interface PlayheadDrag {
-  onMouseDown: (e: React.MouseEvent) => void;
+  onMouseDown: (e: DragStart, atPointer?: boolean) => void;
   dispose: () => void;
 }
 
@@ -46,7 +51,7 @@ function createPlayheadDrag(config: PlayheadDragConfig): PlayheadDrag {
     return Math.min(config.getDuration(), xToTime(clientX, parentRect, config.getZoom(), scrollLeft));
   };
 
-  const onMouseDown = (e: React.MouseEvent): void => {
+  const onMouseDown = (e: DragStart, atPointer = false): void => {
     if (e.button !== 0) return;
 
     e.preventDefault();
@@ -56,10 +61,14 @@ function createPlayheadDrag(config: PlayheadDragConfig): PlayheadDrag {
     config.setDraggingPlayhead(true, config.getCurrentTime());
 
     let pointerX = e.clientX;
-    let metaHeld = e.metaKey;
+    let metaHeld = holdsSnapBypass(e);
     let prevSample: ScrubSample | null = null;
     let unsubscribeEdgeScroll: (() => void) | null = null;
+    // Rects are read once per frame in the read phase: a rect read per move forces a layout behind every style write.
+    let containerRect = config.getContainerRect();
+    let scrollRect: DOMRect | null = null;
     const controller = new AbortController();
+    const lowerPointerShield = raisePointerShield();
     // Edge auto-scroll must keep running while the pointer is held still at the edge.
     const releaseEdgeScrollFrames = holdFrames(EDGE_SCROLL_LABEL);
 
@@ -70,36 +79,40 @@ function createPlayheadDrag(config: PlayheadDragConfig): PlayheadDrag {
       if (velocity > 0) scrubPreview.play(time, velocity);
     };
 
-    const tickEdgeScroll = (): void => {
+    const dragToPointer = (scrollLeft: number): void => {
+      if (!containerRect) return;
+      const time = Math.min(config.getDuration(), xToTime(pointerX, containerRect, config.getZoom(), scrollLeft));
+      const snapped = config.snapTime(time, metaHeld);
+      config.setDragTime(snapped);
+      tickScrubPreview(snapped);
+    };
+
+    const readEdgeScroll = (): void => {
+      containerRect = config.getContainerRect();
+      scrollRect = config.getScrollContainer()?.getBoundingClientRect() ?? null;
+    };
+
+    // The playhead frame refreshes the cached scroll in its read phase, so this write phase reads nothing live.
+    const writeEdgeScroll = (): void => {
       const container = config.getScrollContainer();
-      if (!container) return;
-      const rect = container.getBoundingClientRect();
+      if (!container || !scrollRect) return;
       const velocity = computeEdgeScrollVelocity({
         pointerX,
-        contentLeft: rect.left + GUTTER_WIDTH,
-        contentRight: rect.right,
+        contentLeft: scrollRect.left + GUTTER_WIDTH,
+        contentRight: scrollRect.right,
         edgeSize: EDGE_SCROLL_ZONE,
         maxSpeed: EDGE_SCROLL_MAX_SPEED,
       });
       if (velocity === 0) return;
-      scrollViewBy(container, velocity, 0);
-      const time = computeTimeFromPointer(pointerX);
-      if (time !== null) {
-        const snapped = config.snapTime(time, metaHeld);
-        config.setDragTime(snapped);
-        tickScrubPreview(snapped);
-      }
+      scrollView(container, viewScrollLeft() + velocity);
+      dragToPointer(viewScrollLeft());
     };
 
-    const handleMouseMove = (moveEvent: MouseEvent): void => {
-      metaHeld = moveEvent.metaKey;
+    const handleMouseMove = (moveEvent: Pick<MouseEvent, "clientX" | "metaKey" | "ctrlKey">): void => {
+      metaHeld = holdsSnapBypass(moveEvent);
       pointerX = moveEvent.clientX;
-      const time = computeTimeFromPointer(pointerX);
-      if (time !== null) {
-        const snapped = config.snapTime(time, metaHeld);
-        config.setDragTime(snapped);
-        tickScrubPreview(snapped);
-      }
+      const container = config.getScrollContainer();
+      dragToPointer(container ? readViewScroll(container).left : viewScrollLeft());
     };
 
     const cleanup = (): void => {
@@ -107,6 +120,7 @@ function createPlayheadDrag(config: PlayheadDragConfig): PlayheadDrag {
       unsubscribeEdgeScroll = null;
       releaseEdgeScrollFrames();
       controller.abort();
+      lowerPointerShield();
       scrubPreview.stop();
       config.setDraggingPlayhead(false);
       activeCleanup = null;
@@ -115,9 +129,10 @@ function createPlayheadDrag(config: PlayheadDragConfig): PlayheadDrag {
     const handleMouseUp = (upEvent: MouseEvent): void => {
       const time = computeTimeFromPointer(upEvent.clientX);
       if (time !== null) {
-        const target = config.snapTime(time, upEvent.metaKey);
+        const target = config.snapTime(time, holdsSnapBypass(upEvent));
         config.seekTo(target);
         notePlacement(target, "pointer");
+        noteReplaySpot(target);
       }
       cleanup();
     };
@@ -125,7 +140,9 @@ function createPlayheadDrag(config: PlayheadDragConfig): PlayheadDrag {
     activeCleanup = cleanup;
     document.addEventListener("mousemove", handleMouseMove, { signal: controller.signal });
     document.addEventListener("mouseup", handleMouseUp, { signal: controller.signal });
-    unsubscribeEdgeScroll = subscribeFrame(tickEdgeScroll, EDGE_SCROLL_LABEL);
+    window.addEventListener("blur", lowerPointerShield, { signal: controller.signal });
+    unsubscribeEdgeScroll = subscribeFrame({ read: readEdgeScroll, write: writeEdgeScroll }, EDGE_SCROLL_LABEL);
+    if (atPointer) handleMouseMove(e);
   };
 
   const dispose = (): void => {
