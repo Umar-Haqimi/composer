@@ -1,0 +1,15 @@
+node_modules
+dist
+.git
+.github
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+coverage
+.wrangler
+.superpowers
+graphify-out
+**/__screenshots__
+playwright-report
+test-results
